@@ -98,7 +98,7 @@ Cuts Windows hung-application and service kill timeouts from their defaults (5�
 ---
 
 ### Step 4 — CPU Tweaks
-- **Win32PrioritySeparation = 42** — gives foreground applications (your game) the maximum possible CPU time quantum
+- **Win32PrioritySeparation = 2 (Windows desktop default — short quantum, maximum foreground boost)** — This is the Windows default on all desktop editions. Setting it explicitly ensures it is correct even if a previous script or OEM image changed it. Short quantum with maximum foreground boost gives the game priority over background processes while keeping context switches frequent enough for low input latency. Value 26 (long quantum) can give 1-3% higher average FPS in CPU-bound games but hurts frame time consistency and input latency — value 2 wins overall for gaming feel
 - **CPU idle states disabled** — prevents the processor from entering C-states between frames, eliminating the latency spike when a core wakes from deep sleep. Increases idle heat and power draw — acceptable on a desktop, noticeable on a laptop
 - **CsEnabled = 0** — disables Connected Standby / Modern Standby, required on some Windows 11 systems before custom power plans can be selected
 - **Power Throttling disabled** — stops Windows from deprioritising threads it considers background work, which can incorrectly throttle game threads on hybrid-core CPUs
