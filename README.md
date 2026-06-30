@@ -19,7 +19,7 @@ By running this tool you are accepting the following:
 | What gets disabled | Why it matters |
 |--------------------|----------------|
 | **Windows Update** | Your system will no longer receive security patches |
-| **Windows Defender** (temporarily during run) | Malware could execute undetected during the optimization window |
+| **Windows Defender** | Temporarily during run so it doesnt interfere with windows settings changes |
 | **Spectre & Meltdown mitigations** | Known CPU side-channel vulnerabilities are re-exposed |
 | **UAC (User Account Control)** | Any software on your PC gains silent administrator access |
 | **Core Isolation / Memory Integrity** | Kernel-level exploit protection is removed |
