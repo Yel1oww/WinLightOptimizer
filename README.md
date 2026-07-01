@@ -60,7 +60,7 @@ A single `.bat` file that combines three tools into one interactive menu. No ins
        Win Light Optimizer
   =====================================================
 
-   [1]  System Optimizations  (31 steps)
+   [1]  System Optimizations
    [2]  Clean Temp Files
    [3]  Windows Update  (Enable / Disable)
    [0]  Exit
