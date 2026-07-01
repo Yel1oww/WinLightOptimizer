@@ -1304,7 +1304,7 @@ set "_BLOATPS=%TEMP%\remove_bloat_%RANDOM%.ps1"
     echo     "*Microsoft.Print3D*","*Microsoft.PowerAutomateDesktop*","*Microsoft.SkypeApp*",
     echo     "*Microsoft.Todos*","*Microsoft.Windows.DevHome*","*Microsoft.WindowsAlarms*",
     echo     "*Microsoft.WindowsFeedbackHub*","*Microsoft.WindowsMaps*",
-    echo     "*Microsoft.WindowsSoundRecorder*","*Microsoft.XboxApp*","*Microsoft.ZuneVideo*",
+    echo     "*Microsoft.WindowsSoundRecorder*","*Microsoft.ZuneVideo*",
     echo     "*MicrosoftCorporationII.MicrosoftFamily*","*MicrosoftCorporationII.QuickAssist*",
     echo     "*MicrosoftTeams*","*MSTeams*","*AdobeSystemsIncorporated.AdobePhotoshopExpress*",
     echo     "*Amazon.com.Amazon*","*AmazonVideo.PrimeVideo*","*Disney*","*DrawboardPDF*",
