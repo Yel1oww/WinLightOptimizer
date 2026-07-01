@@ -285,59 +285,66 @@ Removes Widgets and Chat icons from taskbar, disables Start Menu recommendations
 
 ---
 
-### Step 27 — Remove Microsoft Edge
-Physically removes Microsoft Edge from the system rather than just disabling it via policy:
-- Runs Edge's own `setup.exe --force-uninstall` if present
-- Deletes all Edge folders (`%ProgramFiles(x86)%\Microsoft\Edge`, EdgeCore, local AppData)
-- Removes shortcuts and registry entries
-- Blocks Edge from reinstalling via the `DoNotUpdateToEdgeWithChromium` policy key
-- Creates dummy locked folders at the Edge install path so the Windows update mechanism cannot write there
-
-Note: WebView2 (used by some apps) is separate from Edge and is not removed.
-
----
-
-### Step 28 — Remove OneDrive Completely
-Goes further than just disabling the sync service — runs the official Microsoft uninstaller and cleans up everything left behind:
-- `OneDriveSetup.exe /uninstall`
-- Removes `%UserProfile%\OneDrive`, `%LocalAppData%\Microsoft\OneDrive`, `%ProgramData%\Microsoft\OneDrive`, `OneDriveTemp`
-- Removes all shortcuts from Start Menu and Desktop
-- Removes the OneDrive namespace from File Explorer sidebar
-- Adds a policy key blocking OneDrive from reinstalling itself through Windows Update
+### Step 27 — Microsoft Edge Complete Removal
+Physically removes Edge rather than just disabling it via policy:
+- Kills all Edge processes
+- Deletes `%LOCALAPPDATA%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\EdgeCore`, `%ProgramFiles(x86)%\Microsoft\EdgeUpdate`
+- Removes all Edge shortcuts from Desktop and Start Menu
+- Removes Edge registry entries from HKLM and HKCU
+- Adds EdgeUpdate policy keys blocking reinstallation of both the stable and WebView2 channels
+- Creates dummy folders at the original Edge paths and locks them (`icacls /deny`) so Windows Update cannot write back to those locations to reinstall Edge
 
 ---
 
-### Step 29 — Remove Microsoft Store Bloatware
-Removes ~50 pre-installed Microsoft and third-party apps using `Remove-AppxPackage` and `Remove-AppxProvisionedPackage` (the provisioned version prevents them from being reinstalled for new user accounts):
-
-Removed apps include: Clipchamp, 3D Builder, Cortana, Bing Finance/News/Sports/Weather, Copilot, Microsoft Journal, Office Hub, Solitaire Collection, Sticky Notes, Mixed Reality Portal, Skype, Todos, Dev Home, Alarms, Feedback Hub, Maps, Sound Recorder, Xbox apps (Xbox app, TCUI, Gaming Overlay, Game Overlay, Speech-to-Text), Movies & TV, Microsoft Family, Quick Assist, both versions of Teams (personal and work), Phone Link, Outlook, Messaging, Amazon Prime Video, Facebook, Candy Crush (all variants), Bubble Witch, Netflix, Spotify, TikTok, Twitter/X.
+### Step 28 — OneDrive Complete Uninstall
+Goes further than just disabling the sync service (which was in Step 16):
+- Kills the OneDrive process
+- Runs Microsoft's own official uninstallers (`SysWOW64\OneDriveSetup.exe /uninstall` and `System32\OneDriveSetup.exe /uninstall`) — these properly clean up OneDrive's own internal state
+- Removes all OneDrive data folders (`%LOCALAPPDATA%\Microsoft\OneDrive`, `%ProgramData%\Microsoft\OneDrive`, `%USERPROFILE%\OneDrive`, `%SystemDrive%\OneDriveTemp`)
+- Removes all OneDrive shortcuts from Desktop and Start Menu
+- Removes OneDrive from startup registry
+- Adds policy keys blocking OneDrive file sync from being re-enabled (`DisableFileSyncNGSC`, `DisableLibrariesDefaultSaveToOneDrive`)
+- Restarts Explorer to update the sidebar
 
 ---
 
-### Step 30 — UI, Explorer and System Cleanup
-A collection of quality-of-life changes and system cleanup:
+### Step 29 — Microsoft Store Bloatware Removal
+Removes ~60 pre-installed Microsoft Store apps for all users and from the provisioned package list (so they do not reinstall for new user accounts). Uses `Remove-AppxPackage -AllUsers` and `Remove-AppxProvisionedPackage -Online` for each.
 
-| Change | Effect |
-|--------|--------|
-| Show file extensions | `.exe`, `.bat`, `.dll` etc. now visible in Explorer |
-| Windows 10 right-click menu | Removes the "Show more options" extra click on Windows 11 |
-| Left-align taskbar | Moves taskbar icons to left (Windows 11 default is centred) |
-| Hide Search icon | Removes the Search button from taskbar |
-| Instant taskbar previews | `ExtendedUIHoverTime = 1` — window thumbnails appear instantly |
-| Explorer opens to This PC | `LaunchTo = 1` instead of Home/Quick Access |
-| Remove Home from sidebar | Removes the Windows 11 Home namespace from Explorer sidebar |
-| Remove Gallery from sidebar | Removes the Gallery namespace from Explorer sidebar |
-| Clear Start Menu pins | Removes `start2.bin` and `LayoutModification.xml` — resets Start to minimal default |
-| Microsoft 365 ads disabled | Removes promotional content from Windows Settings |
-| Hide Settings Home page | Removes the Home tab from Windows 11 Settings |
-| Disable Paint AI (Cocreator) | Disables Generative AI and Cocreator features in Paint |
-| Disable Notepad AI (Rewrite) | Disables the AI rewrite feature in Notepad |
-| Disable WPBT | `DisableWpbtExecution = 1` — stops OEM/manufacturer scripts that live in BIOS firmware from running at Windows startup. These are scripts that survive full Windows reinstalls because they're stored on the motherboard, not the drive |
+Apps removed include:
+- **Microsoft apps:** Clipchamp, 3D Builder, Cortana, Bing Finance/News/Sports/Translator/Weather, Copilot, Getstarted, Messaging, 3D Viewer, MicrosoftJournal, Office Hub, Solitaire Collection, Sticky Notes, Mixed Reality Portal, Speed Test, News, OneNote (Store), Sway, Print3D, Power Automate Desktop, Skype, Todos, DevHome, Alarms, Feedback Hub, Maps, Sound Recorder, Xbox App, Zune Video, Microsoft Family, Quick Assist, Teams (both old and new versions)
+- **Third-party pre-installs:** Adobe Photoshop Express, Amazon Shopping, Prime Video, Disney, Drawboard PDF, Duolingo, Facebook, Flipboard, Hulu, iHeartRadio, Instagram, Candy Crush (Saga, Soda, Bubble Witch), LinkedIn, Netflix, Pandora, Plex, Spotify, TikTok, TuneIn Radio, Twitter/X, Viber, WinZip
+
+---
+
+### Step 30 — Additional UI & System Tweaks
+A collection of quality-of-life and debloat changes:
+
+| Tweak | What it does |
+|-------|-------------|
+| **Intel LMS disabled** | Intel Management and Security Status service — allows remote control capabilities on Intel platforms. No gaming benefit, small attack surface |
+| **WPBT execution disabled** | Stops OEM vendor startup scripts that are embedded in BIOS/UEFI firmware and survive Windows reinstalls |
+| **WifiSense disabled** | Prevents Windows from automatically connecting to WiFi networks shared by contacts and auto-reporting hotspot usage |
+| **Paint AI disabled** | Disables Microsoft Cocreator AI features in Paint (Windows 11 24H2+) |
+| **Notepad AI disabled** | Disables AI rewrite and summarise features in Notepad (Windows 11 24H2+) |
+| **Remove Home from File Explorer** | Removes the Home hub from the sidebar, sets This PC as the default view |
+| **Remove Gallery from File Explorer** | Removes the AI-powered Gallery feature from the sidebar |
+| **Show file extensions** | `HideFileExt = 0` — file extensions are hidden by default in Windows, which is a genuine security risk (attackers name files `photo.jpg.exe`) |
+| **Windows 10 right-click menu** | Restores the full context menu on Windows 11, removing the extra "Show more options" click |
+| **Left-align taskbar** | `TaskbarAl = 0` — moves taskbar icons back to the left, Windows 11 defaults to centre |
+| **Hide Search icon** | `SearchboxTaskbarMode = 0` — removes the Search button/box from the taskbar |
+| **Instant taskbar previews** | `ExtendedUIHoverTime = 1` — window thumbnail previews appear instantly on hover instead of after a delay |
+| **Microsoft 365 / OneDrive ads** | `ShowSyncProviderNotifications = 0` — stops OneDrive and 365 from showing promotional notifications in Explorer |
+| **Hide Settings Home** | Hides the Windows 11 Settings Home page entirely via `SettingsPageVisibility = hide:home` |
+| **Clear Start Menu pins** | Deletes `LayoutModification.xml` — removes all pinned apps from the Start Menu, leaving it clean |
+
+Explorer is restarted at the end to apply all UI changes immediately.
 
 ---
 
 ### Step 31 — Windows Activation
 Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev). Requires internet. Follow the on-screen prompts.
+
 
 ---
 
@@ -428,65 +435,3 @@ Reboot after running. Use Option 3 in the toolkit to re-enable Windows Update.
 Win Light Optimizer is provided as-is with no warranty of any kind. By using this tool you confirm that you understand and accept every security tradeoff described above, you are running this on a machine you own, and you take full responsibility for any consequences.
 
 **This project is not affiliated with or endorsed by Microsoft.**
-
----
-
-### Step 27 — Microsoft Edge Complete Removal
-Physically removes Edge rather than just disabling it via policy:
-- Kills all Edge processes
-- Deletes `%LOCALAPPDATA%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\EdgeCore`, `%ProgramFiles(x86)%\Microsoft\EdgeUpdate`
-- Removes all Edge shortcuts from Desktop and Start Menu
-- Removes Edge registry entries from HKLM and HKCU
-- Adds EdgeUpdate policy keys blocking reinstallation of both the stable and WebView2 channels
-- Creates dummy folders at the original Edge paths and locks them (`icacls /deny`) so Windows Update cannot write back to those locations to reinstall Edge
-
----
-
-### Step 28 — OneDrive Complete Uninstall
-Goes further than just disabling the sync service (which was in Step 16):
-- Kills the OneDrive process
-- Runs Microsoft's own official uninstallers (`SysWOW64\OneDriveSetup.exe /uninstall` and `System32\OneDriveSetup.exe /uninstall`) — these properly clean up OneDrive's own internal state
-- Removes all OneDrive data folders (`%LOCALAPPDATA%\Microsoft\OneDrive`, `%ProgramData%\Microsoft\OneDrive`, `%USERPROFILE%\OneDrive`, `%SystemDrive%\OneDriveTemp`)
-- Removes all OneDrive shortcuts from Desktop and Start Menu
-- Removes OneDrive from startup registry
-- Adds policy keys blocking OneDrive file sync from being re-enabled (`DisableFileSyncNGSC`, `DisableLibrariesDefaultSaveToOneDrive`)
-- Restarts Explorer to update the sidebar
-
----
-
-### Step 29 — Microsoft Store Bloatware Removal
-Removes ~60 pre-installed Microsoft Store apps for all users and from the provisioned package list (so they do not reinstall for new user accounts). Uses `Remove-AppxPackage -AllUsers` and `Remove-AppxProvisionedPackage -Online` for each.
-
-Apps removed include:
-- **Microsoft apps:** Clipchamp, 3D Builder, Cortana, Bing Finance/News/Sports/Translator/Weather, Copilot, Getstarted, Messaging, 3D Viewer, MicrosoftJournal, Office Hub, Solitaire Collection, Sticky Notes, Mixed Reality Portal, Speed Test, News, OneNote (Store), Sway, Print3D, Power Automate Desktop, Skype, Todos, DevHome, Alarms, Feedback Hub, Maps, Sound Recorder, Xbox App, Zune Video, Microsoft Family, Quick Assist, Teams (both old and new versions)
-- **Third-party pre-installs:** Adobe Photoshop Express, Amazon Shopping, Prime Video, Disney, Drawboard PDF, Duolingo, Facebook, Flipboard, Hulu, iHeartRadio, Instagram, Candy Crush (Saga, Soda, Bubble Witch), LinkedIn, Netflix, Pandora, Plex, Spotify, TikTok, TuneIn Radio, Twitter/X, Viber, WinZip
-
----
-
-### Step 30 — Additional UI & System Tweaks
-A collection of quality-of-life and debloat changes:
-
-| Tweak | What it does |
-|-------|-------------|
-| **Intel LMS disabled** | Intel Management and Security Status service — allows remote control capabilities on Intel platforms. No gaming benefit, small attack surface |
-| **WPBT execution disabled** | Stops OEM vendor startup scripts that are embedded in BIOS/UEFI firmware and survive Windows reinstalls |
-| **WifiSense disabled** | Prevents Windows from automatically connecting to WiFi networks shared by contacts and auto-reporting hotspot usage |
-| **Paint AI disabled** | Disables Microsoft Cocreator AI features in Paint (Windows 11 24H2+) |
-| **Notepad AI disabled** | Disables AI rewrite and summarise features in Notepad (Windows 11 24H2+) |
-| **Remove Home from File Explorer** | Removes the Home hub from the sidebar, sets This PC as the default view |
-| **Remove Gallery from File Explorer** | Removes the AI-powered Gallery feature from the sidebar |
-| **Show file extensions** | `HideFileExt = 0` — file extensions are hidden by default in Windows, which is a genuine security risk (attackers name files `photo.jpg.exe`) |
-| **Windows 10 right-click menu** | Restores the full context menu on Windows 11, removing the extra "Show more options" click |
-| **Left-align taskbar** | `TaskbarAl = 0` — moves taskbar icons back to the left, Windows 11 defaults to centre |
-| **Hide Search icon** | `SearchboxTaskbarMode = 0` — removes the Search button/box from the taskbar |
-| **Instant taskbar previews** | `ExtendedUIHoverTime = 1` — window thumbnail previews appear instantly on hover instead of after a delay |
-| **Microsoft 365 / OneDrive ads** | `ShowSyncProviderNotifications = 0` — stops OneDrive and 365 from showing promotional notifications in Explorer |
-| **Hide Settings Home** | Hides the Windows 11 Settings Home page entirely via `SettingsPageVisibility = hide:home` |
-| **Clear Start Menu pins** | Deletes `LayoutModification.xml` — removes all pinned apps from the Start Menu, leaving it clean |
-
-Explorer is restarted at the end to apply all UI changes immediately.
-
----
-
-### Step 31 — Windows Activation
-Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev). Requires internet. Follow the on-screen prompts.
