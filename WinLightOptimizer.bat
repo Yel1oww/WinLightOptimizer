@@ -49,7 +49,7 @@ echo.
 @echo off
 set PASS=0
 set FAIL=0
-set "_FAILS=%TEMP%\opt_fails_%RANDOM%.txt"
+set "_FAILS=%SystemRoot%\Temp\opt_fails_%RANDOM%.txt"
 if exist "!_FAILS!" del "!_FAILS!" >nul 2>&1
 
 :: Disable ALL Defender protection for the duration of this script
@@ -445,7 +445,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 13 - Power Plan
 :: ================================================
-echo [STEP 13/31] Importing Core Power Plan...
+echo [STEP 13/27] Importing Core Power Plan...
 set "STEP_ERR=0"
 set "_POWTMP_B64=%TEMP%\core_pow.b64"
 set "_POWTMP=%TEMP%\Core.pow"
@@ -646,30 +646,22 @@ if !ERRORLEVEL! neq 0 (
         :: Import did not register the scheme - do not touch ActivePowerScheme, leave existing plan alone
         set STEP_ERR=1
     ) else (
-        :: Try setactive now - will fail silently if Modern Standby is still active (needs reboot first)
+        :: Scheme confirmed present - safe to activate
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        :: Write registry regardless - covers both immediate and post-reboot activation paths
-        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
-        REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
-        :: Apply CPU idle-disable directly to the plan GUID
-        powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
-        powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
-        powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 "WinLO" "Win Light Optimizer Performance Plan" >nul 2>&1
-        :: Create a self-deleting startup task to force WinLO active on next boot
-        :: Runs 10 seconds after startup (gives power manager time to finish init)
-        :: then deletes itself so it only ever fires once
-        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c timeout /t 10 /nobreak >nul && powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO \"Win Light Optimizer Performance Plan\" && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
+        if !ERRORLEVEL! neq 0 (
+            :: powercfg -setactive failed (e.g. still in Modern Standby until reboot) - fall back to direct registry write
+            REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
+        )
     )
 )
 :: Cleanup temp files
 if exist "!_POWTMP_B64!" del "!_POWTMP_B64!" >nul 2>&1
 if exist "!_POWTMP!" del "!_POWTMP!" >nul 2>&1
 if !STEP_ERR!==0 (
-    echo  [OK] WinLO Power Plan
+    echo  [OK] Core Power Plan
     set /a PASS+=1
 ) else (
-    echo  [FAIL] WinLO Power Plan
+    echo  [FAIL] Core Power Plan
     set /a FAIL+=1
     echo Core Power Plan>> "!_FAILS!"
 )
@@ -1290,7 +1282,7 @@ if !STEP_ERR!==0 (
 echo [STEP 29/31] Removing Microsoft Store Bloatware...
 set STEP_ERR=0
 set "_BLOAT=!_FAILS:opt_fails=remove_bloat!"
-set "_BLOATPS=%TEMP%\remove_bloat_%RANDOM%.ps1"
+set "_BLOATPS=%SystemRoot%\Temp\remove_bloat_%RANDOM%.ps1"
 (
     echo $apps = @^(
     echo     "*Clipchamp.Clipchamp*","*Microsoft.3DBuilder*","*Microsoft.549981C3F5F10*",
