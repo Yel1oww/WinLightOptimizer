@@ -19,7 +19,7 @@ echo  =====================================================
 echo        Win Light Optimizer
 echo  =====================================================
 echo.
-echo   [1]  System Optimizations  (27 steps)
+echo   [1]  System Optimizations
 echo   [2]  Clean Temp Files
 echo   [3]  Windows Update  (Enable / Disable)
 echo   [0]  Exit
