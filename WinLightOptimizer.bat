@@ -650,17 +650,26 @@ if !ERRORLEVEL! neq 0 (
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
         :: Always write registry too (ensures selection survives reboot on Modern Standby systems)
         REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
-        :: Apply CPU idle-disable setting directly to the CoreVeeAir plan so it carries its own performance settings
+        :: Apply CPU idle-disable setting directly to the plan so it carries its own performance settings
         powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
+        :: Rename the plan to WinLO so it shows correctly in Power Options
+        powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 "WinLO" "Win Light Optimizer Performance Plan" >nul 2>&1
+        :: Write ActivePowerScheme to BOTH ControlSet entries - Windows reads one or the other depending on boot state
+        REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
+        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
+        :: Create a self-deleting startup task that re-applies WinLO after reboot
+        :: This fires AFTER Windows resets the power scheme during boot (Modern Standby transition)
+        :: then deletes itself so it never runs again
+        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
     )
 )
 :: Cleanup temp files
 if exist "!_POWTMP_B64!" del "!_POWTMP_B64!" >nul 2>&1
 if exist "!_POWTMP!" del "!_POWTMP!" >nul 2>&1
 if !STEP_ERR!==0 (
-    echo  [OK] Core Power Plan
+    echo  [OK] WinLO Power Plan
     set /a PASS+=1
 ) else (
     echo  [FAIL] Core Power Plan
