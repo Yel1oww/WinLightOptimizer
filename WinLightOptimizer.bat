@@ -646,23 +646,20 @@ if !ERRORLEVEL! neq 0 (
         :: Import did not register the scheme - do not touch ActivePowerScheme, leave existing plan alone
         set STEP_ERR=1
     ) else (
-        :: Scheme confirmed present - activate via powercfg AND write registry for both immediate + post-reboot
+        :: Try setactive now - will fail silently if Modern Standby is still active (needs reboot first)
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        :: Always write registry too (ensures selection survives reboot on Modern Standby systems)
+        :: Write registry regardless - covers both immediate and post-reboot activation paths
         REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
-        :: Apply CPU idle-disable setting directly to the plan so it carries its own performance settings
+        REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
+        :: Apply CPU idle-disable directly to the plan GUID
         powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        :: Rename the plan to WinLO so it shows correctly in Power Options
         powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 "WinLO" "Win Light Optimizer Performance Plan" >nul 2>&1
-        :: Write ActivePowerScheme to BOTH ControlSet entries - Windows reads one or the other depending on boot state
-        REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
-        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
-        :: Create a self-deleting startup task that re-applies WinLO after reboot
-        :: This fires AFTER Windows resets the power scheme during boot (Modern Standby transition)
-        :: then deletes itself so it never runs again
-        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
+        :: Create a self-deleting startup task to force WinLO active on next boot
+        :: Runs 10 seconds after startup (gives power manager time to finish init)
+        :: then deletes itself so it only ever fires once
+        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c timeout /t 10 /nobreak >nul && powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO \"Win Light Optimizer Performance Plan\" && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
     )
 )
 :: Cleanup temp files
@@ -672,7 +669,7 @@ if !STEP_ERR!==0 (
     echo  [OK] WinLO Power Plan
     set /a PASS+=1
 ) else (
-    echo  [FAIL] Core Power Plan
+    echo  [FAIL] WinLO Power Plan
     set /a FAIL+=1
     echo Core Power Plan>> "!_FAILS!"
 )
