@@ -18,7 +18,7 @@ After reboot, go to: **Control Panel → Hardware and Sound → Power Options**
 
 You should see **WinLO** listed. Click the radio button next to it to make sure it is the active plan.
 
-**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the WinLO plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **210 FPS vs 320 FPS** — a loss of 50 frames just from having the wrong power plan active.
+**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default plan after rebooting. This has been tested directly: running without the WinLO plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **210 FPS vs 320 FPS** — a loss of 50 frames just from having the wrong power plan active.
 
 If WinLO is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
 
