@@ -12,15 +12,15 @@
 
 ## 🔴 IMPORTANT — After Rebooting, Check Your Power Plan
 
-> **After the script finishes and you restart your PC, open Power Options and make sure the WinLO plan is selected.**
+> **After the script finishes and you restart your PC, open Power Options and make sure the CoreVeeAir's plan is selected.**
 
 After reboot, go to: **Control Panel → Hardware and Sound → Power Options**
 
-You should see **WinLO** listed. Click the radio button next to it to make sure it is the active plan.
+You should see **CoreVeeAir's** listed. Click the radio button next to it to make sure it is the active plan.
 
-**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the WinLO plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (WinLO)** — a loss of 50 frames just from having the wrong power plan active.
+**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the CoreVeeAir's plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (CoreVeeAir's)** — a loss of 50 frames just from having the wrong power plan active.
 
-If WinLO is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
+If CoreVeeAir's is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
 
 ---
 
@@ -535,7 +535,97 @@ Automatically downloads and configures Intelligent Standby List Cleaner (ISLC) t
 
 ---
 
+## 🧹 Option 2 — Clean Temp Files
+
+Clears system junk and reports disk space freed before and after.
+
+| Step | What it does |
+|------|-------------|
+| Windows Temp | Deletes and recreates `%SystemRoot%\Temp` |
+| User Temp | Clears `%TEMP%` |
+| Prefetch | Removes prefetch files (rebuilt on next boot) |
+| Update Cache | Stops WU services, clears `SoftwareDistribution\Download`, restarts |
+| Log Files | Deletes `.log` files from system log paths |
+| Event Viewer | Clears all event log channels via `wevtutil cl` |
+| DNS Cache | `ipconfig /flushdns` |
+| Winsock | `netsh winsock reset` |
+| Recycle Bin | Empties `C:\$Recycle.Bin` |
+| Disk Cleanup | Runs `cleanmgr /sagerun:1` silently |
+
+---
+
+## 🔄 Option 3 — Windows Update Toggle
+
+### Disable
+- Adds Group Policy keys blocking all Windows Update internet access
+- Sets `NoAutoUpdate = 1`
+- Disables and stops `dosvc`, `wuauserv`, `UsoSvc`
+
+### Enable
+- Removes all blocking policy keys
+- Restores `dosvc`, `wuauserv`, `UsoSvc`, `bits`, `cryptsvc`, `TrustedInstaller` to automatic startup
+- Starts all services
+
+---
+
 ## 🎮 Option 4 — Windows Activation
 Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev) to activate Windows. Requires internet connection. Follow the on-screen prompts.
 
 This was moved out of the optimization steps so it can be run independently at any time without re-running all 31 optimization steps.
+
+---
+
+## 🔬 Honest Assessment
+
+**Genuinely effective:**
+Spectre/Meltdown mitigation removal, Core Isolation disable, CPU idle states off, HAGS, ULPS off, USB Selective Suspend off, fixed pagefile, `disabledynamictick`, audio enhancement disable, service and task cleanup (especially on lower-end systems).
+
+**Small but real:**
+DNS to 1.1.1.1, Win32PrioritySeparation, MMCSS tuning, network buffer tweaks.
+
+**Mostly placebo on modern Windows 10/11:**
+The large `GraphicsDrivers\Power` latency registry block and most of the AFD parameter list — circulated from Windows 7-era guides, not shown to affect modern systems in controlled testing.
+
+---
+
+## 🛡️ Restoring Security
+
+```batch
+:: Re-enable UAC
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 1 /f
+
+:: Re-enable Spectre/Meltdown mitigations
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverride" /t REG_DWORD /d 0 /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverrideMask" /t REG_DWORD /d 3 /f
+
+:: Re-enable Core Isolation
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "Enabled" /t REG_DWORD /d 1 /f
+```
+
+Reboot after running. Use Option 3 in the toolkit to re-enable Windows Update.
+
+---
+
+## 📁 Files
+
+| File | Description |
+|------|-------------|
+| `WinLightOptimizer.bat` | The only file you need — all tools in one file |
+| `Core.pow` | Custom power plan source (already embedded in the bat, not required separately) |
+
+---
+
+## ⚙️ Requirements
+
+- Windows 10 or Windows 11 (x64)
+- Run as Administrator
+- PowerShell 5.0+ (included in all Windows 10/11 builds)
+- Internet required only for Option 4 (Windows Activation) and Step 31 (NVIDIA Profile Inspector download on NVIDIA systems)
+
+---
+
+## 📜 Disclaimer
+
+Win Light Optimizer is provided as-is with no warranty of any kind. By using this tool you confirm that you understand and accept every security tradeoff described above, you are running this on a machine you own, and you take full responsibility for any consequences.
+
+**This project is not affiliated with or endorsed by Microsoft.**
