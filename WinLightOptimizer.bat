@@ -82,7 +82,7 @@ echo.
 :: ================================================
 :: STEP 1 - Visual Performance
 :: ================================================
-echo [STEP 1/31] Adjusting Visual Performance...
+echo [STEP 1/32] Adjusting Visual Performance...
 set STEP_ERR=0
 REG ADD "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v "VisualFXSetting" /t REG_DWORD /d 2 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v "TaskbarAnimations" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -104,7 +104,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 2 - Timeout Tweaks
 :: ================================================
-echo [STEP 2/31] Applying Timeout Tweaks...
+echo [STEP 2/32] Applying Timeout Tweaks...
 set STEP_ERR=0
 Reg.exe add "HKCU\Control Panel\Desktop" /v "AutoEndTasks" /t REG_SZ /d "1" /f >nul 2>&1 || set STEP_ERR=1
 Reg.exe add "HKCU\Control Panel\Desktop" /v "HungAppTimeout" /t REG_SZ /d "1000" /f >nul 2>&1 || set STEP_ERR=1
@@ -123,7 +123,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 3 - Registry Tweaks
 :: ================================================
-echo [STEP 3/31] Applying Registry Tweaks...
+echo [STEP 3/32] Applying Registry Tweaks...
 set STEP_ERR=0
 REG ADD "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications" /v "NoTileApplicationNotification" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\Control Panel\Desktop" /v "SmoothScroll" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -172,7 +172,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 4 - CPU Tweaks
 :: ================================================
-echo [STEP 4/31] Applying CPU Tweaks...
+echo [STEP 4/32] Applying CPU Tweaks...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v "Win32PrioritySeparation" /t REG_DWORD /d 42 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583" /v "ValueMax" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -197,7 +197,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 5 - Display Tweaks
 :: ================================================
-echo [STEP 5/31] Applying Display Tweaks...
+echo [STEP 5/32] Applying Display Tweaks...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\ModernSleep" /v "AdaptiveRefreshRate" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "VideoIdleTimeout" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -216,7 +216,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 6 - GPU Tweaks
 :: ================================================
-echo [STEP 6/31] Applying GPU Tweaks...
+echo [STEP 6/32] Applying GPU Tweaks...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler" /v "EnableFrameBufferCompression" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler" /v "EnableGpuBoost" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -235,7 +235,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 7 - Network Tweaks
 :: ================================================
-echo [STEP 7/31] Applying Network Tweaks...
+echo [STEP 7/32] Applying Network Tweaks...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\0001" /v "PnPCapabilities" /t REG_DWORD /d 36 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\0002" /v "PnPCapabilities" /t REG_DWORD /d 36 /f >nul 2>&1 || set STEP_ERR=1
@@ -296,7 +296,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 8 - System and USB Tweaks
 :: ================================================
-echo [STEP 8/31] Applying System Tweaks...
+echo [STEP 8/32] Applying System Tweaks...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "EnergySaverStatus" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "DynamicThrottlePolicy" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -327,7 +327,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 9 - Boot and CPU Scheduler Tweaks
 :: ================================================
-echo [STEP 9/31] Applying Boot and CPU Scheduler Tweaks...
+echo [STEP 9/32] Applying Boot and CPU Scheduler Tweaks...
 set STEP_ERR=0
 bcdedit /set bootux disabled >nul 2>&1 || set STEP_ERR=1
 bcdedit /set tscsyncpolicy enhanced >nul 2>&1 || set STEP_ERR=1
@@ -348,7 +348,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 10 - Disable RDP
 :: ================================================
-echo [STEP 10/31] Disabling RDP...
+echo [STEP 10/32] Disabling RDP...
 set STEP_ERR=0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v "fDenyTSConnections" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
@@ -363,7 +363,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 11 - Security Tweaks
 :: ================================================
-echo [STEP 11/31] Applying Security Tweaks...
+echo [STEP 11/32] Applying Security Tweaks...
 set STEP_ERR=0
 :: Disable SSL 2.0
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client" /v "DisabledByDefault" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -419,7 +419,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 12 - Block Telemetry via HOSTS + DNS NRPT
 :: ================================================
-echo [STEP 12/31] Blocking Microsoft Telemetry...
+echo [STEP 12/32] Blocking Microsoft Telemetry...
 set STEP_ERR=0
 set "_HOSTSFILE=%SystemRoot%\System32\drivers\etc\hosts"
 set "_DOMAINS=vortex.data.microsoft.com settings-win.data.microsoft.com watson.telemetry.microsoft.com ocsp.digicert.com fe3.delivery.mp.microsoft.com wpad.microsoft.com browser.events.data.microsoft.com activity.windows.com"
@@ -447,7 +447,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 13 - Power Plan
 :: ================================================
-echo [STEP 13/31] Importing Core Power Plan...
+echo [STEP 13/32] Importing Core Power Plan...
 set "STEP_ERR=0"
 set "_POWTMP_B64=%TEMP%\core_pow.b64"
 set "_POWTMP=%TEMP%\Core.pow"
@@ -679,7 +679,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 14 - Disable Event Trace Sessions (ETS)
 :: ================================================
-echo [STEP 14/31] Disabling Event Trace Sessions (ETS)...
+echo [STEP 14/32] Disabling Event Trace Sessions (ETS)...
 set STEP_ERR=0
 for %%X in (
     "NTFSLog"
@@ -715,7 +715,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 15 - Privacy and Bloat Tweaks
 :: ================================================
-echo [STEP 15/31] Applying Privacy and Bloat Tweaks...
+echo [STEP 15/32] Applying Privacy and Bloat Tweaks...
 set STEP_ERR=0
 :: Location and Sensors
 REG ADD "HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" /v "DisableLocation" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -819,7 +819,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 16 - Additional Privacy and Service Tweaks
 :: ================================================
-echo [STEP 16/31] Applying Additional Privacy and Service Tweaks...
+echo [STEP 16/32] Applying Additional Privacy and Service Tweaks...
 set STEP_ERR=0
 :: Password Reveal button
 REG ADD "HKLM\SOFTWARE\Policies\Microsoft\Windows\CredUI" /v "DisablePasswordReveal" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -870,7 +870,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 17 - Custom Visual Effects
 :: ================================================
-echo [STEP 17/31] Applying Custom Visual Effects...
+echo [STEP 17/32] Applying Custom Visual Effects...
 set STEP_ERR=0
 :: Disable transparency
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v "EnableTransparency" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -913,7 +913,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 18 - PowerShell Execution Policy
 :: ================================================
-echo [STEP 18/31] Setting PowerShell Execution Policy...
+echo [STEP 18/32] Setting PowerShell Execution Policy...
 set STEP_ERR=0
 powershell -Command "Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force" >nul 2>&1 || set STEP_ERR=1
 reg add "HKLM\SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell" /v "ExecutionPolicy" /t REG_SZ /d "Unrestricted" /f >nul 2>&1 || set STEP_ERR=1
@@ -929,7 +929,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 19 - Core Isolation and Memory Integrity
 :: ================================================
-echo [STEP 19/31] Disabling Core Isolation and Memory Integrity...
+echo [STEP 19/32] Disabling Core Isolation and Memory Integrity...
 set STEP_ERR=0
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "Enabled" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v "EnableVirtualizationBasedSecurity" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -947,7 +947,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 20 - Spectre and Meltdown Mitigations
 :: ================================================
-echo [STEP 20/31] Disabling Spectre and Meltdown Mitigations...
+echo [STEP 20/32] Disabling Spectre and Meltdown Mitigations...
 set STEP_ERR=0
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverride" /t REG_DWORD /d 3 /f >nul 2>&1 || set STEP_ERR=1
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverrideMask" /t REG_DWORD /d 3 /f >nul 2>&1 || set STEP_ERR=1
@@ -963,7 +963,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 21 - Disable Unnecessary Services
 :: ================================================
-echo [STEP 21/31] Disabling Unnecessary Services...
+echo [STEP 21/32] Disabling Unnecessary Services...
 set STEP_ERR=0
 :: Background Intelligent Transfer Service
 sc config BITS start= disabled >nul 2>&1 & sc stop BITS >nul 2>&1
@@ -1039,7 +1039,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 22 - Scheduled Tasks Cleanup
 :: ================================================
-echo [STEP 22/31] Disabling Telemetry and Bloat Scheduled Tasks...
+echo [STEP 22/32] Disabling Telemetry and Bloat Scheduled Tasks...
 set STEP_ERR=0
 for %%T in (
     "Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser"
@@ -1095,7 +1095,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 23 - Disk and File System Tweaks
 :: ================================================
-echo [STEP 23/31] Applying Disk and File System Tweaks...
+echo [STEP 23/32] Applying Disk and File System Tweaks...
 set STEP_ERR=0
 :: Disable NTFS last access timestamp (reduces I/O on every file read/write)
 fsutil behavior set disablelastaccess 1 >nul 2>&1 || set STEP_ERR=1
@@ -1123,7 +1123,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 24 - UI and Taskbar Cleanup
 :: ================================================
-echo [STEP 24/31] Applying UI and Taskbar Cleanup...
+echo [STEP 24/32] Applying UI and Taskbar Cleanup...
 set STEP_ERR=0
 :: Disable Widgets / News and Interests on taskbar
 REG ADD "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "TaskbarDa" /t REG_DWORD /d 0 /f >nul 2>&1
@@ -1165,7 +1165,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 25 - Audio Tweaks
 :: ================================================
-echo [STEP 25/31] Applying Audio Tweaks...
+echo [STEP 25/32] Applying Audio Tweaks...
 set STEP_ERR=0
 :: Disable audio enhancements on all render devices
 powershell -NoProfile -Command "Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render' -ErrorAction SilentlyContinue | ForEach-Object { $p=Join-Path $_.PSPath 'Properties'; if(Test-Path $p){ try{ New-ItemProperty -Path $p -Name '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue|Out-Null }catch{} } }" >nul 2>&1 || set STEP_ERR=1
@@ -1191,7 +1191,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 26 - NVIDIA and AMD GPU Cleanup
 :: ================================================
-echo [STEP 26/31] Applying NVIDIA and AMD GPU Cleanup...
+echo [STEP 26/32] Applying NVIDIA and AMD GPU Cleanup...
 set STEP_ERR=0
 :: Disable NVIDIA telemetry service
 sc config NvTelemetryContainer start= disabled >nul 2>&1 & sc stop NvTelemetryContainer >nul 2>&1
@@ -1213,7 +1213,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 27 - Microsoft Edge Complete Removal
 :: ================================================
-echo [STEP 27/31] Removing Microsoft Edge...
+echo [STEP 27/32] Removing Microsoft Edge...
 set STEP_ERR=0
 :: Kill Edge processes
 taskkill /f /im msedge.exe >nul 2>&1
@@ -1252,7 +1252,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 28 - OneDrive Complete Uninstall
 :: ================================================
-echo [STEP 28/31] Removing OneDrive...
+echo [STEP 28/32] Removing OneDrive...
 set STEP_ERR=0
 :: Kill OneDrive
 taskkill /f /im OneDrive.exe >nul 2>&1
@@ -1289,7 +1289,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 29 - Microsoft Store Bloatware Removal
 :: ================================================
-echo [STEP 29/31] Removing Microsoft Store Bloatware...
+echo [STEP 29/32] Removing Microsoft Store Bloatware...
 set STEP_ERR=0
 set "_BLOAT=!_FAILS:opt_fails=remove_bloat!"
 set "_BLOATPS=%TEMP%\remove_bloat_%RANDOM%.ps1"
@@ -1336,7 +1336,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 30 - Additional UI and System Tweaks
 :: ================================================
-echo [STEP 30/31] Applying Additional UI and System Tweaks...
+echo [STEP 30/32] Applying Additional UI and System Tweaks...
 set STEP_ERR=0
 :: Intel LMS - remote management service (security risk, zero gaming benefit)
 sc config LMS start= disabled >nul 2>&1 & sc stop LMS >nul 2>&1
@@ -1384,9 +1384,9 @@ if !STEP_ERR!==0 (
 )
 
 :: ================================================
-:: STEP 31 - NVIDIA 3D Profile Setup
+:: STEP 32 - NVIDIA 3D Profile Setup
 :: ================================================
-echo [STEP 31/31] Applying NVIDIA 3D Profile...
+echo [STEP 32/32] Applying NVIDIA 3D Profile...
 set STEP_ERR=0
 
 :: Detect NVIDIA GPU - checks ALL video adapters so works on laptops with iGPU + discrete GPU
@@ -1966,6 +1966,59 @@ if !STEP_ERR!==0 (
     echo NVIDIA 3D Profile>> "!_FAILS!"
 )
 
+:: ================================================
+:: STEP 32 - ISLC Setup
+:: ================================================
+echo [STEP 32/32] Setting up ISLC (Intelligent Standby List Cleaner)...
+set STEP_ERR=0
+
+set "AppDir=!USERPROFILE!\Documents\ISLC"
+set "ExeName=Intelligent standby list cleaner ISLC.exe"
+set "ConfigName=Intelligent standby list cleaner ISLC.exe.Config"
+set "ExeUrl=https://raw.githubusercontent.com/Yel1oww/WinLightOptimizer/main/Intelligent%%20standby%%20list%%20cleaner%%20ISLC.exe"
+set "ConfigUrl=https://raw.githubusercontent.com/Yel1oww/WinLightOptimizer/main/Intelligent%%20standby%%20list%%20cleaner%%20ISLC.exe.Config"
+
+:: Check if already running
+tasklist /FI "IMAGENAME eq !ExeName!" 2>NUL | find /I "!ExeName!" >NUL
+if "!ERRORLEVEL!"=="0" (
+    echo  - ISLC is already running. Skipping install.
+) else (
+    if not exist "!AppDir!" mkdir "!AppDir!" >nul 2>&1
+    
+    :: Download Exe
+    if not exist "!AppDir!\!ExeName!" (
+        curl -s -L -o "!AppDir!\!ExeName!" "!ExeUrl!"
+        if !ERRORLEVEL! neq 0 set STEP_ERR=1
+    )
+    
+    :: Download Config
+    if not exist "!AppDir!\!ConfigName!" (
+        curl -s -L -o "!AppDir!\!ConfigName!" "!ConfigUrl!"
+        if !ERRORLEVEL! neq 0 set STEP_ERR=1
+    )
+    
+    :: Calculate RAM, update config, and launch
+    if exist "!AppDir!\!ConfigName!" (
+        set "PSCommand=$ramBytes = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory; $halfRamMB = [math]::Round($ramBytes / 1048576 / 2); $conf = '!AppDir!\!ConfigName!'; $text = Get-Content $conf -Raw; $text = $text -replace '(<setting name=\"WantedFreeRAM\" serializeAs=\"String\">\s*<value>)\d+(</value>)', \"`${1}$halfRamMB`${2}\"; Set-Content -Path $conf -Value $text"
+        powershell -NoProfile -Command "!PSCommand!" >nul 2>&1
+        if !ERRORLEVEL! neq 0 set STEP_ERR=1
+        
+        :: Launch minimized
+        pushd "!AppDir!"
+        start "" /MIN "!ExeName!"
+        popd
+    )
+)
+
+if !STEP_ERR!==0 (
+    echo  [OK] ISLC Setup
+    set /a PASS+=1
+) else (
+    echo  [FAIL] ISLC Setup
+    set /a FAIL+=1
+    echo ISLC Setup>> "!_FAILS!"
+)
+
 :: Re-enable Defender
 echo.
 echo Re-enabling Windows Defender...
@@ -1998,8 +2051,8 @@ echo ================================================
 echo        ALL OPTIMIZATIONS COMPLETE!
 echo ================================================
 echo.
-echo  Steps completed:  !PASS!/31
-echo  Steps failed:     !FAIL!/31
+echo  Steps completed:  !PASS!/32
+echo  Steps failed:     !FAIL!/32
 echo.
 
 if !FAIL! GTR 0 (
@@ -2048,6 +2101,7 @@ echo  [28] OneDrive completely uninstalled (official uninstaller + folders remov
 echo  [29] Microsoft Store bloatware removed (Candy Crush, TikTok, Teams, Skype +50 more)
 echo  [30] Additional UI tweaks (LMS, WPBT, WifiSense, Paint/Notepad AI, file exts, right-click menu, taskbar)
 echo  [31] NVIDIA 3D profile applied ^(NVIDIA GPUs only - skipped on non-NVIDIA systems^)
+echo  [32] ISLC downloaded, RAM threshold configured, and launched minimized
 echo.
 echo  A RESTART IS REQUIRED for all changes to take effect!
 echo.
