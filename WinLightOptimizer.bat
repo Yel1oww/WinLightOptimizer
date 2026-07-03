@@ -22,6 +22,7 @@ echo.
 echo   [1]  System Optimizations
 echo   [2]  Clean Temp Files
 echo   [3]  Windows Update  (Enable / Disable)
+echo   [4]  Windows Activation
 echo   [0]  Exit
 echo.
 echo  =====================================================
@@ -32,6 +33,7 @@ echo.
 if "%MENU_CHOICE%"=="1" goto :OPT1
 if "%MENU_CHOICE%"=="2" goto :OPT2
 if "%MENU_CHOICE%"=="3" goto :OPT3
+if "%MENU_CHOICE%"=="4" goto :OPT4
 if "%MENU_CHOICE%"=="0" goto :EXIT
 echo  Invalid option, try again.
 timeout /t 2 >nul
@@ -49,7 +51,7 @@ echo.
 @echo off
 set PASS=0
 set FAIL=0
-set "_FAILS=%SystemRoot%\Temp\opt_fails_%RANDOM%.txt"
+set "_FAILS=%TEMP%\opt_fails_%RANDOM%.txt"
 if exist "!_FAILS!" del "!_FAILS!" >nul 2>&1
 
 :: Disable ALL Defender protection for the duration of this script
@@ -127,6 +129,11 @@ REG ADD "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotificatio
 REG ADD "HKCU\Control Panel\Desktop" /v "SmoothScroll" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags\AllFolders\Shell" /v "FolderType" /t REG_SZ /d "NotSpecified" /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "HideFastUserSwitching" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
+:: Disable UAC prompts entirely
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "ConsentPromptBehaviorAdmin" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "ConsentPromptBehaviorUser" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "PromptOnSecureDesktop" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace" /v "AllowWindowsInkWorkspace" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "ExitLatency" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "ExitLatencyCheckEnabled" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -440,7 +447,7 @@ if !STEP_ERR!==0 (
 :: ================================================
 :: STEP 13 - Power Plan
 :: ================================================
-echo [STEP 13/27] Importing Core Power Plan...
+echo [STEP 13/31] Importing Core Power Plan...
 set "STEP_ERR=0"
 set "_POWTMP_B64=%TEMP%\core_pow.b64"
 set "_POWTMP=%TEMP%\Core.pow"
@@ -641,22 +648,30 @@ if !ERRORLEVEL! neq 0 (
         :: Import did not register the scheme - do not touch ActivePowerScheme, leave existing plan alone
         set STEP_ERR=1
     ) else (
-        :: Scheme confirmed present - safe to activate
+        :: Try setactive now - will fail silently if Modern Standby is still active (needs reboot first)
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        if !ERRORLEVEL! neq 0 (
-            :: powercfg -setactive failed (e.g. still in Modern Standby until reboot) - fall back to direct registry write
-            REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
-        )
+        :: Write registry regardless - covers both immediate and post-reboot activation paths
+        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
+        REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
+        :: Apply CPU idle-disable directly to the plan GUID
+        powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
+        powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
+        powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
+        powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 "WinLO" "Win Light Optimizer Performance Plan" >nul 2>&1
+        :: Create a self-deleting startup task to force WinLO active on next boot
+        :: Runs 10 seconds after startup (gives power manager time to finish init)
+        :: then deletes itself so it only ever fires once
+        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c timeout /t 10 /nobreak >nul && powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO \"Win Light Optimizer Performance Plan\" && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
     )
 )
 :: Cleanup temp files
 if exist "!_POWTMP_B64!" del "!_POWTMP_B64!" >nul 2>&1
 if exist "!_POWTMP!" del "!_POWTMP!" >nul 2>&1
 if !STEP_ERR!==0 (
-    echo  [OK] Core Power Plan
+    echo  [OK] WinLO Power Plan
     set /a PASS+=1
 ) else (
-    echo  [FAIL] Core Power Plan
+    echo  [FAIL] WinLO Power Plan
     set /a FAIL+=1
     echo Core Power Plan>> "!_FAILS!"
 )
@@ -1155,11 +1170,14 @@ set STEP_ERR=0
 :: Disable audio enhancements on all render devices
 powershell -NoProfile -Command "Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render' -ErrorAction SilentlyContinue | ForEach-Object { $p=Join-Path $_.PSPath 'Properties'; if(Test-Path $p){ try{ New-ItemProperty -Path $p -Name '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' -Value 1 -PropertyType DWord -Force -EA SilentlyContinue|Out-Null }catch{} } }" >nul 2>&1 || set STEP_ERR=1
 :: MMCSS audio task priorities (lower audio scheduling latency)
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NoLazyMode" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "AlwaysOn" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Affinity" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Background Only" /t REG_SZ /d "False" /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Clock Rate" /t REG_DWORD /d 10000 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Priority" /t REG_DWORD /d 6 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Scheduling Category" /t REG_SZ /d "Medium" /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "SFIO Priority" /t REG_SZ /d "Normal" /f >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
     echo  [OK] Audio Tweaks
@@ -1274,7 +1292,7 @@ if !STEP_ERR!==0 (
 echo [STEP 29/31] Removing Microsoft Store Bloatware...
 set STEP_ERR=0
 set "_BLOAT=!_FAILS:opt_fails=remove_bloat!"
-set "_BLOATPS=%SystemRoot%\Temp\remove_bloat_%RANDOM%.ps1"
+set "_BLOATPS=%TEMP%\remove_bloat_%RANDOM%.ps1"
 (
     echo $apps = @^(
     echo     "*Clipchamp.Clipchamp*","*Microsoft.3DBuilder*","*Microsoft.549981C3F5F10*",
@@ -1366,15 +1384,587 @@ if !STEP_ERR!==0 (
 )
 
 :: ================================================
-:: STEP 31 - Windows Activation
+:: STEP 31 - NVIDIA 3D Profile Setup
 :: ================================================
-echo [STEP 31/31] Running Windows Activation Script...
-echo  Launching MAS activation tool - follow the prompts...
-echo.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://get.activated.win | iex"
-echo.
-echo  [OK] Windows Activation script executed
-set /a PASS+=1
+echo [STEP 31/31] Applying NVIDIA 3D Profile...
+set STEP_ERR=0
+
+:: Detect NVIDIA GPU - checks ALL video adapters so works on laptops with iGPU + discrete GPU
+set "_NVGPU="
+for /f "tokens=*" %%G in ('wmic path win32_VideoController get name 2^>nul ^| findstr /i "NVIDIA"') do if not defined _NVGPU set "_NVGPU=%%G"
+if not defined _NVGPU (
+    echo  [SKIP] No NVIDIA GPU detected
+    goto :NVIDIA_DONE
+)
+echo  Detected: !_NVGPU!
+
+set "_NVPI=%SystemRoot%\Temp\nvidiaProfileInspector.exe"
+set "_NVNIP_B64=%SystemRoot%\Temp\inspector_b64.txt"
+set "_NVNIP=%SystemRoot%\Temp\inspector.nip"
+
+:: Download NVIDIA Profile Inspector from GitHub
+echo  Downloading NVIDIA Profile Inspector...
+powershell -NoProfile -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/Yel1oww/WinLightOptimizer/main/nvidiaProfileInspector.exe','!_NVPI!')" >nul 2>&1
+if !ERRORLEVEL! neq 0 (
+    echo  [FAIL] Could not download Profile Inspector - check internet connection
+    set STEP_ERR=1
+    goto :NVIDIA_CLEANUP
+)
+
+:: Write embedded NIP profile base64 to temp file
+if exist "!_NVNIP_B64!" del "!_NVNIP_B64!" >nul 2>&1
+echo 77u/PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTE2Ij8+DQo8QXJy>> "!_NVNIP_B64!"
+echo YXlPZlByb2ZpbGU+DQogIDxQcm9maWxlPg0KICAgIDxQcm9maWxlTmFtZT5CYXNl>> "!_NVNIP_B64!"
+echo IFByb2ZpbGU8L1Byb2ZpbGVOYW1lPg0KICAgIDxFeGVjdXRlYWJsZXMgLz4NCiAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ3M+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nTmFtZUluZm8+IDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ0lEPjM5MDQ2NzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbyAvPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo U2V0dGluZ0lEPjk4MzIyNjwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1Zh>> "!_NVNIP_B64!"
+echo bHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwv>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9m>> "!_NVNIP_B64!"
+echo aWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbyAvPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ0lEPjk4MzIyNzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29y>> "!_NVNIP_B64!"
+echo ZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQ>> "!_NVNIP_B64!"
+echo cm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbyAvPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ0lEPjk4MzI5NTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ1ZhbHVlPkFBQUFRQUFBQUFBPTwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkJpbmFyeTwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0>> "!_NVNIP_B64!"
+echo dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz5TaGFkZXIgQ2FjaGU8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdJRD4xNjc1MjYzPC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3Jk>> "!_NVNIP_B64!"
+echo PC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFBy>> "!_NVNIP_B64!"
+echo b2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlRleHR1cmUg>> "!_NVNIP_B64!"
+echo ZmlsdGVyaW5nIC0gTmVnYXRpdmUgTE9EIGJpYXM8L1NldHRpbmdOYW1lSW5mbz4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdJRD4xNjg2Mzc2PC9TZXR0aW5nSUQ+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo PlRleHR1cmUgZmlsdGVyaW5nIC0gVHJpbGluZWFyIG9wdGltaXphdGlvbjwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjMwNjY2MTA8L1NldHRp>> "!_NVNIP_B64!"
+echo bmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJv>> "!_NVNIP_B64!"
+echo ZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nTmFtZUluZm8+U2hhcnBlbmluZyBWYWx1ZTwvU2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ0lEPjMwNzAxNTc8L1NldHRpbmdJRD4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdWYWx1ZT41MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5n>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJ>> "!_NVNIP_B64!"
+echo bmZvPlNoYXJwZW5pbmcgLSBEZW5vaXNpbmcgRmFjdG9yPC9TZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MzA3MDE1ODwvU2V0dGluZ0lEPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ1ZhbHVlPjE3PC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxW>> "!_NVNIP_B64!"
+echo YWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRp>> "!_NVNIP_B64!"
+echo bmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+U2hhcnBlbmluZyBGaWx0ZXI8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdJRD41ODY3ODE2PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlZlcnRp>> "!_NVNIP_B64!"
+echo Y2FsIFN5bmMgVGVhciBDb250cm9sPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nSUQ+NTkxMjQxMjwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z1ZhbHVlPjI1MjUzNjg0Mzk8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVl>> "!_NVNIP_B64!"
+echo VHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4N>> "!_NVNIP_B64!"
+echo CiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5m>> "!_NVNIP_B64!"
+echo bz5QcmVmZXJyZWQgcmVmcmVzaCByYXRlPC9TZXR0aW5nTmFtZUluZm8+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nSUQ+NjYwMDAwMTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5E>> "!_NVNIP_B64!"
+echo d29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5OVklE>> "!_NVNIP_B64!"
+echo SUEgUHJlZGVmaW5lZCBBbWJpZW50IE9jY2x1c2lvbiBVc2FnZTwvU2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjY3MDE4ODE8L1NldHRpbmdJRD4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNl>> "!_NVNIP_B64!"
+echo dHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo TmFtZUluZm8+IDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lE>> "!_NVNIP_B64!"
+echo PjY3MTA4MzY8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9T>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlw>> "!_NVNIP_B64!"
+echo ZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRp>> "!_NVNIP_B64!"
+echo bmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+IDwvU2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ0lEPjY3MTA4ODU8L1NldHRpbmdJRD4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdWYWx1ZT4xPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1>> "!_NVNIP_B64!"
+echo ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+>> "!_NVNIP_B64!"
+echo DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+QW1iaWVudCBPY2NsdXNpb248L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdJRD42NzE0MTUzPC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3Jk>> "!_NVNIP_B64!"
+echo PC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFBy>> "!_NVNIP_B64!"
+echo b2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPiA8L1NldHRp>> "!_NVNIP_B64!"
+echo bmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD42Nzc2MzczPC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo SUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2Zp>> "!_NVNIP_B64!"
+echo bGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPiA8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdJRD42Nzc2OTM3PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+>> "!_NVNIP_B64!"
+echo MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1>> "!_NVNIP_B64!"
+echo ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVT>> "!_NVNIP_B64!"
+echo ZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPk1heGltdW0gcHJlLXJl>> "!_NVNIP_B64!"
+echo bmRlcmVkIGZyYW1lczwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z0lEPjgxMDIwNDY8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4x>> "!_NVNIP_B64!"
+echo PC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVl>> "!_NVNIP_B64!"
+echo VHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNl>> "!_NVNIP_B64!"
+echo dHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+VGV4dHVyZSBmaWx0ZXJp>> "!_NVNIP_B64!"
+echo bmcgLSBBbmlzb3Ryb3BpYyBmaWx0ZXIgb3B0aW1pemF0aW9uPC9TZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+ODcwMzM0NDwvU2V0dGluZ0lEPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0>> "!_NVNIP_B64!"
+echo dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz5TSUxLIFNtb290aG5lc3M8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdJRD45OTkwNzM3PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkVuYWJs>> "!_NVNIP_B64!"
+echo ZSBzYW1wbGUgaW50ZXJsZWF2aW5nIChNRkFBKTwvU2V0dGluZ05hbWVJbmZvPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ0lEPjEwMDExMDUyPC9TZXR0aW5nSUQ+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo PlZlcnRpY2FsIFN5bmM8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdJRD4xMTA0MTIzMTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjEzODUwNDAwNzwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlNoYXJw>> "!_NVNIP_B64!"
+echo ZW5pbmcgVmFsdWUgZm9yIE5JUyAyLjA8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdJRD4xMTI1MDQ2NTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ1ZhbHVlPjUwPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+>> "!_NVNIP_B64!"
+echo RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAg>> "!_NVNIP_B64!"
+echo ICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+RW5h>> "!_NVNIP_B64!"
+echo YmxlIE5JUyAyLjA8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4xMTI1MDcyMTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0>> "!_NVNIP_B64!"
+echo dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5FbmFibGUgTklTMiBBcHAg>> "!_NVNIP_B64!"
+echo Q291bnQ8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4xMTI1>> "!_NVNIP_B64!"
+echo MDczNzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRp>> "!_NVNIP_B64!"
+echo bmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5TaGFkZXIgZGlzayBjYWNoZSBtYXhp>> "!_NVNIP_B64!"
+echo bXVtIHNpemU8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4x>> "!_NVNIP_B64!"
+echo MTMwNjEzNTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjQyOTQ5>> "!_NVNIP_B64!"
+echo NjcyOTU8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwv>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9m>> "!_NVNIP_B64!"
+echo aWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbyAvPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ0lEPjEyOTkxMDk3PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlRleHR1>> "!_NVNIP_B64!"
+echo cmUgZmlsdGVyaW5nIC0gUXVhbGl0eTwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ0lEPjEzNTEwMjg5PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+MjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5E>> "!_NVNIP_B64!"
+echo d29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz4gPC9T>> "!_NVNIP_B64!"
+echo ZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MTQwMTkwMTQ8L1Nl>> "!_NVNIP_B64!"
+echo dHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwv>> "!_NVNIP_B64!"
+echo UHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nTmFtZUluZm8+IDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo U2V0dGluZ0lEPjE0MDE5MDE1PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3Jk>> "!_NVNIP_B64!"
+echo PC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFBy>> "!_NVNIP_B64!"
+echo b2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvIC8+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nSUQ+MTQzNjY4MDg8L1NldHRpbmdJRD4NCiAgICAgICAgPFNl>> "!_NVNIP_B64!"
+echo dHRpbmdWYWx1ZT4zMjwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBl>> "!_NVNIP_B64!"
+echo PkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlRl>> "!_NVNIP_B64!"
+echo eHR1cmUgZmlsdGVyaW5nIC0gQW5pc290cm9waWMgc2FtcGxlIG9wdGltaXphdGlv>> "!_NVNIP_B64!"
+echo bjwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjE1MTUxNjMz>> "!_NVNIP_B64!"
+echo PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MTwvU2V0dGluZ1Zh>> "!_NVNIP_B64!"
+echo bHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAg>> "!_NVNIP_B64!"
+echo ICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ05hbWVJbmZvPkVuYWJsZSBOSVMgMi4wIEtNRCBOT1RJRklD>> "!_NVNIP_B64!"
+echo QVRJT048L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yODAy>> "!_NVNIP_B64!"
+echo NzkzOTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRp>> "!_NVNIP_B64!"
+echo bmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5WaXJ0dWFsIFJlYWxpdHkgcHJlLXJl>> "!_NVNIP_B64!"
+echo bmRlcmVkIGZyYW1lczwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z0lEPjI2OTU1Mzk3MTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5XaGlzcGVyIE1vZGU8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNjk1NzMyNTg8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFs>> "!_NVNIP_B64!"
+echo dWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nTmFtZUluZm8+V2hpc3BlciBNb2RlIEFwcGxpY2F0aW9uIEZQ>> "!_NVNIP_B64!"
+echo UzwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI2OTU3MzI1>> "!_NVNIP_B64!"
+echo OTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdW>> "!_NVNIP_B64!"
+echo YWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAg>> "!_NVNIP_B64!"
+echo ICAgICAgPFNldHRpbmdOYW1lSW5mbz5GbGFnIHRvIGNvbnRyb2wgc21vb3RoIEFG>> "!_NVNIP_B64!"
+echo UiBiZWhhdmlvcjwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lE>> "!_NVNIP_B64!"
+echo PjI3MDE5ODYyNzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0>> "!_NVNIP_B64!"
+echo dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5Bbmlzb3Ryb3BpYyBmaWx0>> "!_NVNIP_B64!"
+echo ZXJpbmcgc2V0dGluZzwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z0lEPjI3MDQyNjUzNzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5TTEkgaW5kaWNhdG9y>> "!_NVNIP_B64!"
+echo PC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MjcxMDg1NjQ5>> "!_NVNIP_B64!"
+echo PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+ODc3ODcxMjA0PC9T>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlw>> "!_NVNIP_B64!"
+echo ZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRp>> "!_NVNIP_B64!"
+echo bmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+TlZJRElBIHByZWRlZmluZWQg>> "!_NVNIP_B64!"
+echo U0xJIG1vZGU8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4y>> "!_NVNIP_B64!"
+echo NzE4MzA3MjE8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9T>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlw>> "!_NVNIP_B64!"
+echo ZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRp>> "!_NVNIP_B64!"
+echo bmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+TlZJRElBIHByZWRlZmluZWQg>> "!_NVNIP_B64!"
+echo U0xJIG1vZGUgb24gRGlyZWN0WCAxMDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ0lEPjI3MTgzMDcyMjwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5E>> "!_NVNIP_B64!"
+echo d29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5TTEkg>> "!_NVNIP_B64!"
+echo cmVuZGVyaW5nIG1vZGU8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdJRD4yNzE4MzA3Mzc8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1>> "!_NVNIP_B64!"
+echo ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1Zh>> "!_NVNIP_B64!"
+echo bHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+TnVtYmVyIG9mIEdQ>> "!_NVNIP_B64!"
+echo VXMgdG8gdXNlIG9uIFNMSSByZW5kZXJpbmcgbW9kZTwvU2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ0lEPjI3MTgzNDMyMTwvU2V0dGluZ0lEPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZh>> "!_NVNIP_B64!"
+echo bHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGlu>> "!_NVNIP_B64!"
+echo Zz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1l>> "!_NVNIP_B64!"
+echo SW5mbz5OVklESUEgcHJlZGVmaW5lZCBudW1iZXIgb2YgR1BVcyB0byB1c2Ugb24g>> "!_NVNIP_B64!"
+echo U0xJIHJlbmRlcmluZyBtb2RlPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nSUQ+MjcxODM0MzIyPC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3Jk>> "!_NVNIP_B64!"
+echo PC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFBy>> "!_NVNIP_B64!"
+echo b2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPk5WSURJQSBw>> "!_NVNIP_B64!"
+echo cmVkZWZpbmVkIG51bWJlciBvZiBHUFVzIHRvIHVzZSBvbiBTTEkgcmVuZGVyaW5n>> "!_NVNIP_B64!"
+echo IG1vZGUgb24gRGlyZWN0WCAxMDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo U2V0dGluZ0lEPjI3MTgzNDMyMzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29y>> "!_NVNIP_B64!"
+echo ZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQ>> "!_NVNIP_B64!"
+echo cm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5OVklESUEg>> "!_NVNIP_B64!"
+echo UHJlZGVmaW5lZCBGWEFBIFVzYWdlPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nSUQ+MjcxODk1NDMzPC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkxpc3Qg>> "!_NVNIP_B64!"
+echo b2YgVW5pdmVyc2FsIEdQVSBpZHM8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdJRD4yNzE5MjkzMzY8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdWYWx1ZT5ub25lPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+>> "!_NVNIP_B64!"
+echo U3RyaW5nPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPk5W>> "!_NVNIP_B64!"
+echo SURJQSBQcmVkZWZpbmVkIEFuc2VsIFVzYWdlPC9TZXR0aW5nTmFtZUluZm8+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nSUQ+MjcxOTY1MDY1PC9TZXR0aW5nSUQ+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pk5vIG92ZXJyaWRlIG9mIEFuaXNvdHJvcGljIGZpbHRlcmluZzwvU2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI3MjM1NDQ4NTwvU2V0dGluZ0lE>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdOYW1lSW5mbz5OVklESUEgUXVhbGl0eSB1cHNjYWxpbmc8L1NldHRpbmdOYW1l>> "!_NVNIP_B64!"
+echo SW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNzI5MDkzODA8L1NldHRpbmdJRD4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNl>> "!_NVNIP_B64!"
+echo dHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5n>> "!_NVNIP_B64!"
+echo TmFtZUluZm8+QXBwbGljYXRpb24gUHJvZmlsZSBOb3RpZmljYXRpb24gUG9wdXAg>> "!_NVNIP_B64!"
+echo VGltZW91dDwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI3>> "!_NVNIP_B64!"
+echo Mjk3OTEyNjwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1Nl>> "!_NVNIP_B64!"
+echo dHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBl>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGlu>> "!_NVNIP_B64!"
+echo Zz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5Qb3dlciBtYW5hZ2VtZW50IG1v>> "!_NVNIP_B64!"
+echo ZGU8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNzQxOTcz>> "!_NVNIP_B64!"
+echo NjE8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4xPC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAg>> "!_NVNIP_B64!"
+echo ICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nTmFtZUluZm8+RG8gbm90IGRpc3BsYXkgdGhpcyBwcm9m>> "!_NVNIP_B64!"
+echo aWxlIGluIHRoZSBDb250cm9sIFBhbmVsPC9TZXR0aW5nTmFtZUluZm8+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nSUQ+Mjc1NjAyNjg3PC9TZXR0aW5nSUQ+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBl>> "!_NVNIP_B64!"
+echo PkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkVu>> "!_NVNIP_B64!"
+echo YWJsZSBGWEFBPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+>> "!_NVNIP_B64!"
+echo Mjc2MDg5MjAyPC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwv>> "!_NVNIP_B64!"
+echo U2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5>> "!_NVNIP_B64!"
+echo cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkVuYWJsZSBBbnNlbDwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI3NjE1ODgzNDwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Q>> "!_NVNIP_B64!"
+echo cm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdOYW1lSW5mbz5BbnRpYWxpYXNpbmcgLSBTTEkgQUE8L1NldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNzY0OTU0NTE8L1NldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8+QW50aWFsaWFzaW5nIC0gR2FtbWEgY29ycmVjdGlvbjwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI3NjY1Mjk1NzwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Q>> "!_NVNIP_B64!"
+echo cm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdOYW1lSW5mbz5BbnRpYWxpYXNpbmcgLSBNb2RlPC9TZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+Mjc2NzU3NTk1PC9TZXR0aW5nSUQ+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVT>> "!_NVNIP_B64!"
+echo ZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z05hbWVJbmZvPlBsYXRmb3JtIEJvb3N0PC9TZXR0aW5nTmFtZUluZm8+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nSUQ+Mjc3MDQxMTUwPC9TZXR0aW5nSUQ+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBl>> "!_NVNIP_B64!"
+echo PkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkZS>> "!_NVNIP_B64!"
+echo TCBMb3cgTGF0ZW5jeTwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z0lEPjI3NzA0MTE1MjwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5GcmFtZSBSYXRlIExp>> "!_NVNIP_B64!"
+echo bWl0ZXI8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNzcw>> "!_NVNIP_B64!"
+echo NDExNTQ8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0>> "!_NVNIP_B64!"
+echo aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4N>> "!_NVNIP_B64!"
+echo CiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+QmFja2dyb3VuZCBBcHBsaWNhdGlv>> "!_NVNIP_B64!"
+echo biBNYXggRnJhbWUgUmF0ZTwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ0lEPjI3NzA0MTE1NzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1Zh>> "!_NVNIP_B64!"
+echo bHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwv>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9m>> "!_NVNIP_B64!"
+echo aWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5CYWNrZ3JvdW5k>> "!_NVNIP_B64!"
+echo IEFwcGxpY2F0aW9uIE1heCBGcmFtZSBSYXRlIG9ubHkgZm9yIE5WQ1BMIHRvIG1h>> "!_NVNIP_B64!"
+echo aW50YWluIHRoZSBwcmV2aW91cyBzbGlkZXIgdmFsdWUgd2hlbiB0aGUgQkdfRlJM>> "!_NVNIP_B64!"
+echo X0ZQUyBpcyBzZXQgdG8gRGlzYWJsZWQuPC9TZXR0aW5nTmFtZUluZm8+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nSUQ+Mjc3MDQxMTU4PC9TZXR0aW5nSUQ+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBl>> "!_NVNIP_B64!"
+echo PkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkZy>> "!_NVNIP_B64!"
+echo YW1lIFJhdGUgTGltaXRlciBmb3IgTlZDUEw8L1NldHRpbmdOYW1lSW5mbz4NCiAg>> "!_NVNIP_B64!"
+echo ICAgICAgPFNldHRpbmdJRD4yNzcwNDExNjI8L1NldHRpbmdJRD4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5>> "!_NVNIP_B64!"
+echo cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQog>> "!_NVNIP_B64!"
+echo ICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+>> "!_NVNIP_B64!"
+echo VG9nZ2xlIHRoZSBWUlIgZ2xvYmFsIGZlYXR1cmU8L1NldHRpbmdOYW1lSW5mbz4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdJRD4yNzgxOTY1Njc8L1NldHRpbmdJRD4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdWYWx1ZT4xPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1>> "!_NVNIP_B64!"
+echo ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+>> "!_NVNIP_B64!"
+echo DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+RGlzcGxheSB0aGUgUGh5c1ggaW5kaWNhdG9yPC9TZXR0aW5nTmFtZUluZm8+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nSUQ+Mjc4MTk2NTkxPC9TZXR0aW5nSUQ+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nVmFsdWU+ODc3ODcxMjA0PC9TZXR0aW5nVmFsdWU+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8+VlJSIHJlcXVlc3RlZCBzdGF0ZTwvU2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ0lEPjI3ODE5NjcyNzwvU2V0dGluZ0lEPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZh>> "!_NVNIP_B64!"
+echo bHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGlu>> "!_NVNIP_B64!"
+echo Zz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1l>> "!_NVNIP_B64!"
+echo SW5mbz5EaXNwbGF5IHRoZSBWUlIgT3ZlcmxheSBJbmRpY2F0b3I8L1NldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yNzgyNjIxMjc8L1NldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4xPC9TZXR0aW5nVmFsdWU+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8+VmFyaWFibGUgcmVmcmVzaCBSYXRlPC9TZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+DQogICAgICAgIDxTZXR0aW5nSUQ+Mjc5NDc2Njg2PC9TZXR0aW5nSUQ+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPkctU1lOQzwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z0lEPjI3OTQ3NjY4NzwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo PjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz4gPC9TZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MjgxMTA2NjA1PC9TZXR0aW5nSUQ+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVT>> "!_NVNIP_B64!"
+echo ZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z05hbWVJbmZvPkFuaXNvdHJvcGljIGZpbHRlcmluZyBtb2RlPC9TZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MjgyMjQ1OTEwPC9TZXR0aW5nSUQ+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVT>> "!_NVNIP_B64!"
+echo ZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z05hbWVJbmZvPkFudGlhbGlhc2luZyAtIFRyYW5zcGFyZW5jeSBTdXBlcnNhbXBs>> "!_NVNIP_B64!"
+echo aW5nPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MjgyMzY0>> "!_NVNIP_B64!"
+echo NTQ5PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGlu>> "!_NVNIP_B64!"
+echo Z1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQog>> "!_NVNIP_B64!"
+echo ICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ05hbWVJbmZvPkFudGlhbGlhc2luZyAtIFNldHRpbmc8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yODI1NTUzNDY8>> "!_NVNIP_B64!"
+echo L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFs>> "!_NVNIP_B64!"
+echo dWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nTmFtZUluZm8+QW50aWFsaWFzaW5nIC0gQmVoYXZpb3IgRmxh>> "!_NVNIP_B64!"
+echo Z3M8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yODM5NTgx>> "!_NVNIP_B64!"
+echo NDY8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAg>> "!_NVNIP_B64!"
+echo ICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nTmFtZUluZm8+Q1VEQSBTeXNtZW0gRmFsbGJhY2sgUG9s>> "!_NVNIP_B64!"
+echo aWN5PC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+MjgzOTYy>> "!_NVNIP_B64!"
+echo NTY5PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGlu>> "!_NVNIP_B64!"
+echo Z1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQog>> "!_NVNIP_B64!"
+echo ICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ05hbWVJbmZvPk9wdGltdXMgZmxhZ3MgZm9yIGVuYWJs>> "!_NVNIP_B64!"
+echo ZWQgYXBwbGljYXRpb25zPC9TZXR0aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nSUQ+Mjg0ODEwMzY4PC9TZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFs>> "!_NVNIP_B64!"
+echo dWU+MTY8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwv>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9m>> "!_NVNIP_B64!"
+echo aWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5mbz5FbmFibGUgYXBw>> "!_NVNIP_B64!"
+echo bGljYXRpb24gZm9yIE9wdGltdXM8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdJRD4yODQ4MTAzNjk8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdWYWx1ZT4xNjwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3>> "!_NVNIP_B64!"
+echo b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAg>> "!_NVNIP_B64!"
+echo PFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlNoaW0g>> "!_NVNIP_B64!"
+echo UmVuZGVyaW5nIE1vZGUgT3B0aW9ucyBwZXIgYXBwbGljYXRpb24gZm9yIE9wdGlt>> "!_NVNIP_B64!"
+echo dXM8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yODQ4MTAz>> "!_NVNIP_B64!"
+echo NzI8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo VmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAg>> "!_NVNIP_B64!"
+echo ICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nTmFtZUluZm8+QW50aWFsaWFzaW5nIC0gVHJhbnNwYXJl>> "!_NVNIP_B64!"
+echo bmN5IE11bHRpc2FtcGxpbmc8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNl>> "!_NVNIP_B64!"
+echo dHRpbmdJRD4yODQ5NjIyMDQ8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdW>> "!_NVNIP_B64!"
+echo YWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8>> "!_NVNIP_B64!"
+echo L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJv>> "!_NVNIP_B64!"
+echo ZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUluZm8+T3ZlcmxheSBJ>> "!_NVNIP_B64!"
+echo bmRpY2F0b3I8L1NldHRpbmdOYW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4y>> "!_NVNIP_B64!"
+echo ODYzMzU1NzQ8L1NldHRpbmdJRD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT41MTwv>> "!_NVNIP_B64!"
+echo U2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5>> "!_NVNIP_B64!"
+echo cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZvPlN0ZXJlbyAtIHN3YXAgbW9k>> "!_NVNIP_B64!"
+echo ZTwvU2V0dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjI4ODU2ODEx>> "!_NVNIP_B64!"
+echo NTwvU2V0dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdW>> "!_NVNIP_B64!"
+echo YWx1ZT4NCiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgPC9Qcm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAg>> "!_NVNIP_B64!"
+echo ICAgICAgPFNldHRpbmdOYW1lSW5mbz5TdGVyZW8gLSBFbmFibGU8L1NldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD4yOTYzOTQzOTM8L1NldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8+U3RlcmVvIC0gU3dhcCBleWVzPC9TZXR0aW5nTmFtZUluZm8+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nSUQ+Mjk2NjMzMTgwPC9TZXR0aW5nSUQ+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFs>> "!_NVNIP_B64!"
+echo dWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5n>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJ>> "!_NVNIP_B64!"
+echo bmZvPlN0ZXJlbyAtIERpc3BsYXkgbW9kZTwvU2V0dGluZ05hbWVJbmZvPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ0lEPjMwMDQ4OTMxMzwvU2V0dGluZ0lEPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo U2V0dGluZ1ZhbHVlPjQyOTQ5NjcyOTU8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0>> "!_NVNIP_B64!"
+echo dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz5CdWZmZXItZmxpcHBpbmcgbW9kZTwvU2V0dGluZ05hbWVJbmZvPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ0lEPjUzODkyNzUxOTwvU2V0dGluZ0lEPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZhbHVl>> "!_NVNIP_B64!"
+echo VHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGluZz4N>> "!_NVNIP_B64!"
+echo CiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1lSW5m>> "!_NVNIP_B64!"
+echo byAvPg0KICAgICAgICA8U2V0dGluZ0lEPjU0MDUwODczODwvU2V0dGluZ0lEPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8U2V0dGluZ1ZhbHVlPjEyODwvU2V0dGluZ1ZhbHVlPg0KICAgICAg>> "!_NVNIP_B64!"
+echo ICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVT>> "!_NVNIP_B64!"
+echo ZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGlu>> "!_NVNIP_B64!"
+echo Z05hbWVJbmZvPkZvcmNlIFN0ZXJlbyBzaHV0dGVyaW5nPC9TZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTQxOTU2NjIwPC9TZXR0aW5nSUQ+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvIC8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTQzMjY2MDA2PC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo SUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MTI4PC9TZXR0aW5nVmFsdWU+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJv>> "!_NVNIP_B64!"
+echo ZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nTmFtZUluZm8+RW5hYmxlIG92ZXJsYXk8L1NldHRpbmdOYW1lSW5mbz4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFNldHRpbmdJRD41NDM5NTkyMzY8L1NldHRpbmdJRD4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAgICAgIDxWYWx1>> "!_NVNIP_B64!"
+echo ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmlsZVNldHRpbmc+>> "!_NVNIP_B64!"
+echo DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+T3BlbkdMIEdESSBjb21wYXRpYmlsaXR5PC9TZXR0aW5nTmFtZUluZm8+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nSUQ+NTQ0MzkyNjExPC9TZXR0aW5nSUQ+DQogICAgICAg>> "!_NVNIP_B64!"
+echo IDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8VmFsdWVU>> "!_NVNIP_B64!"
+echo eXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0aW5nPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo IC8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTQ0NTQzOTQxPC9TZXR0aW5nSUQ+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPkFudGlhbGlhc2luZyAtIExpbmUgZ2FtbWE8L1NldHRpbmdOYW1lSW5m>> "!_NVNIP_B64!"
+echo bz4NCiAgICAgICAgPFNldHRpbmdJRD41NDU4OTgzNDg8L1NldHRpbmdJRD4NCiAg>> "!_NVNIP_B64!"
+echo ICAgICAgPFNldHRpbmdWYWx1ZT4xNjwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPkRlZXAgY29sb3IgZm9yIDNEIGFwcGxpY2F0aW9uczwvU2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjU0NjgxNjc1ODwvU2V0dGluZ0lE>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjE8L1NldHRpbmdWYWx1ZT4NCiAgICAg>> "!_NVNIP_B64!"
+echo ICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxl>> "!_NVNIP_B64!"
+echo U2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRp>> "!_NVNIP_B64!"
+echo bmdOYW1lSW5mbz5FeHBvcnRlZCBPdmVybGF5IHBpeGVsIHR5cGVzPC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo TmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTQ3MDIyNDQ3PC9TZXR0aW5n>> "!_NVNIP_B64!"
+echo SUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MTwvU2V0dGluZ1ZhbHVlPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2Zp>> "!_NVNIP_B64!"
+echo bGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPlVuaWZpZWQgYmFjay9kZXB0aCBidWZmZXI8L1NldHRpbmdO>> "!_NVNIP_B64!"
+echo YW1lSW5mbz4NCiAgICAgICAgPFNldHRpbmdJRD41NDc1MjQ2OTM8L1NldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT40Mjk0OTY3Mjk1PC9TZXR0aW5nVmFs>> "!_NVNIP_B64!"
+echo dWU+DQogICAgICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAg>> "!_NVNIP_B64!"
+echo IDwvUHJvZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxTZXR0aW5nTmFtZUluZm8+VGhyZWFkZWQgb3B0aW1pemF0aW9uPC9TZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTQ5NTI4MDk0PC9TZXR0>> "!_NVNIP_B64!"
+echo aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0K>> "!_NVNIP_B64!"
+echo ICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1By>> "!_NVNIP_B64!"
+echo b2ZpbGVTZXR0aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo U2V0dGluZ05hbWVJbmZvPlByZWZlcnJlZCBPcGVuR0wgR1BVPC9TZXR0aW5nTmFt>> "!_NVNIP_B64!"
+echo ZUluZm8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTUwNTY0ODM4PC9TZXR0aW5nSUQ+>> "!_NVNIP_B64!"
+echo DQogICAgICAgIDxTZXR0aW5nVmFsdWU+aWQsMi4wOjIyMDQxMERFLDAwMDAwMTAw>> "!_NVNIP_B64!"
+echo LEdGIC0gKDM2OCwyLDE2MSwyNDU3NikgQCAoMCk8L1NldHRpbmdWYWx1ZT4NCiAg>> "!_NVNIP_B64!"
+echo ICAgICAgPFZhbHVlVHlwZT5TdHJpbmc8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJv>> "!_NVNIP_B64!"
+echo ZmlsZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxT>> "!_NVNIP_B64!"
+echo ZXR0aW5nTmFtZUluZm8+VnVsa2FuL09wZW5HTCBwcmVzZW50IG1ldGhvZDwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ05hbWVJbmZvPg0KICAgICAgICA8U2V0dGluZ0lEPjU1MDkzMjcyODwvU2V0>> "!_NVNIP_B64!"
+echo dGluZ0lEPg0KICAgICAgICA8U2V0dGluZ1ZhbHVlPjI8L1NldHRpbmdWYWx1ZT4N>> "!_NVNIP_B64!"
+echo CiAgICAgICAgPFZhbHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Q>> "!_NVNIP_B64!"
+echo cm9maWxlU2V0dGluZz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAg>> "!_NVNIP_B64!"
+echo PFNldHRpbmdOYW1lSW5mbz5UcmlwbGUgYnVmZmVyaW5nPC9TZXR0aW5nTmFtZUlu>> "!_NVNIP_B64!"
+echo Zm8+DQogICAgICAgIDxTZXR0aW5nSUQ+NTUzNTA1MjczPC9TZXR0aW5nSUQ+DQog>> "!_NVNIP_B64!"
+echo ICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVlPg0KICAgICAgICA8>> "!_NVNIP_B64!"
+echo VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8L1Byb2ZpbGVTZXR0>> "!_NVNIP_B64!"
+echo aW5nPg0KICAgICAgPFByb2ZpbGVTZXR0aW5nPg0KICAgICAgICA8U2V0dGluZ05h>> "!_NVNIP_B64!"
+echo bWVJbmZvPkV4dGVuc2lvbiBTdHJpbmcgdmVyc2lvbjwvU2V0dGluZ05hbWVJbmZv>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8U2V0dGluZ0lEPjU1MzYxMjQzNTwvU2V0dGluZ0lEPg0KICAg>> "!_NVNIP_B64!"
+echo ICAgICA8U2V0dGluZ1ZhbHVlPjA8L1NldHRpbmdWYWx1ZT4NCiAgICAgICAgPFZh>> "!_NVNIP_B64!"
+echo bHVlVHlwZT5Ed29yZDwvVmFsdWVUeXBlPg0KICAgICAgPC9Qcm9maWxlU2V0dGlu>> "!_NVNIP_B64!"
+echo Zz4NCiAgICAgIDxQcm9maWxlU2V0dGluZz4NCiAgICAgICAgPFNldHRpbmdOYW1l>> "!_NVNIP_B64!"
+echo SW5mbyAvPg0KICAgICAgICA8U2V0dGluZ0lEPjEzNDM2NDY4MTQ8L1NldHRpbmdJ>> "!_NVNIP_B64!"
+echo RD4NCiAgICAgICAgPFNldHRpbmdWYWx1ZT4wPC9TZXR0aW5nVmFsdWU+DQogICAg>> "!_NVNIP_B64!"
+echo ICAgIDxWYWx1ZVR5cGU+RHdvcmQ8L1ZhbHVlVHlwZT4NCiAgICAgIDwvUHJvZmls>> "!_NVNIP_B64!"
+echo ZVNldHRpbmc+DQogICAgICA8UHJvZmlsZVNldHRpbmc+DQogICAgICAgIDxTZXR0>> "!_NVNIP_B64!"
+echo aW5nTmFtZUluZm8gLz4NCiAgICAgICAgPFNldHRpbmdJRD40Mjk0OTY3Mjk1PC9T>> "!_NVNIP_B64!"
+echo ZXR0aW5nSUQ+DQogICAgICAgIDxTZXR0aW5nVmFsdWU+MDwvU2V0dGluZ1ZhbHVl>> "!_NVNIP_B64!"
+echo Pg0KICAgICAgICA8VmFsdWVUeXBlPkR3b3JkPC9WYWx1ZVR5cGU+DQogICAgICA8>> "!_NVNIP_B64!"
+echo L1Byb2ZpbGVTZXR0aW5nPg0KICAgIDwvU2V0dGluZ3M+DQogIDwvUHJvZmlsZT4N>> "!_NVNIP_B64!"
+echo CjwvQXJyYXlPZlByb2ZpbGU+>> "!_NVNIP_B64!"
+
+:: Decode NIP from base64 using PowerShell (preserves UTF-16 encoding exactly)
+set "_NIP_B=!_NVNIP_B64!"
+set "_NIP_O=!_NVNIP!"
+powershell -NoProfile -Command "[IO.File]::WriteAllBytes($env:_NIP_O,[Convert]::FromBase64String([IO.File]::ReadAllText($env:_NIP_B).Trim()))" >nul 2>&1
+if !ERRORLEVEL! neq 0 (
+    echo  [FAIL] Could not decode NIP profile
+    set STEP_ERR=1
+    goto :NVIDIA_CLEANUP
+)
+
+:: Apply NIP profile via Profile Inspector - writes settings directly to NVIDIA driver database
+echo  Applying NVIDIA 3D profile...
+"!_NVPI!" "!_NVNIP!" >nul 2>&1
+if !ERRORLEVEL! neq 0 set STEP_ERR=1
+
+:: Registry backup - enables "Use advanced 3D image settings" in NVIDIA Control Panel
+:: This is a UI-level setting not included in NIP profiles, so we set it directly
+REG ADD "HKCU\Software\NVIDIA Corporation\Global\NVTweak" /v "Splendid" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
+
+:NVIDIA_CLEANUP
+if exist "!_NVPI!" del "!_NVPI!" >nul 2>&1
+if exist "!_NVNIP_B64!" del "!_NVNIP_B64!" >nul 2>&1
+if exist "!_NVNIP!" del "!_NVNIP!" >nul 2>&1
+
+:NVIDIA_DONE
+if !STEP_ERR!==0 (
+    echo  [OK] NVIDIA 3D Profile Applied
+    set /a PASS+=1
+) else (
+    echo  [FAIL] NVIDIA 3D Profile
+    set /a FAIL+=1
+    echo NVIDIA 3D Profile>> "!_FAILS!"
+)
 
 :: Re-enable Defender
 echo.
@@ -1402,6 +1992,7 @@ echo.
 :: ================================================
 :: RESULTS SUMMARY
 :: ================================================
+
 echo.
 echo ================================================
 echo        ALL OPTIMIZATIONS COMPLETE!
@@ -1456,7 +2047,7 @@ echo  [27] Microsoft Edge completely removed (folders, registry, shortcuts, dumm
 echo  [28] OneDrive completely uninstalled (official uninstaller + folders removed)
 echo  [29] Microsoft Store bloatware removed (Candy Crush, TikTok, Teams, Skype +50 more)
 echo  [30] Additional UI tweaks (LMS, WPBT, WifiSense, Paint/Notepad AI, file exts, right-click menu, taskbar)
-echo  [31] Windows Activation script executed
+echo  [31] NVIDIA 3D profile applied ^(NVIDIA GPUs only - skipped on non-NVIDIA systems^)
 echo.
 echo  A RESTART IS REQUIRED for all changes to take effect!
 echo.
@@ -1623,6 +2214,25 @@ net start dosvc >nul 2>&1
 net start bits >nul 2>&1
 net start wuauserv >nul 2>&1
 echo  [OK] Windows Update enabled and restored.
+echo.
+pause
+goto :RETURN_MENU
+
+:: ====================================================
+::  OPTION 4 - WINDOWS ACTIVATION
+:: ====================================================
+:OPT4
+cls
+color 0A
+echo.
+echo  =====================================================
+echo         Win Light Optimizer  -  Windows Activation
+echo  =====================================================
+echo.
+echo  Launching MAS activation tool - follow the prompts...
+echo  Requires internet connection.
+echo.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://get.activated.win | iex"
 echo.
 pause
 goto :RETURN_MENU
