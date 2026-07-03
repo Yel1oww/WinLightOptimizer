@@ -1384,9 +1384,9 @@ if !STEP_ERR!==0 (
 )
 
 :: ================================================
-:: STEP 32 - NVIDIA 3D Profile Setup
+:: STEP 31 - NVIDIA 3D Profile Setup
 :: ================================================
-echo [STEP 32/32] Applying NVIDIA 3D Profile...
+echo [STEP 31/32] Applying NVIDIA 3D Profile...
 set STEP_ERR=0
 
 :: Detect NVIDIA GPU - checks ALL video adapters so works on laptops with iGPU + discrete GPU
