@@ -32,7 +32,7 @@ By running this tool you are accepting the following:
 
 | What gets disabled | Why it matters |
 |--------------------|----------------|
-| **Windows Update** | Your system will no longer receive security patches |
+| **Windows Update** | Your system will no longer receive security patches (There is a option to re-enable this in the script) |
 | **Windows Defender** | Temporarily during run so it doesnt interfere with windows settings changes |
 | **Spectre & Meltdown mitigations** | Known CPU side-channel vulnerabilities are re-exposed |
 | **Core Isolation / Memory Integrity** | Kernel-level exploit protection is removed |
