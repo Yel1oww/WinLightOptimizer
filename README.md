@@ -35,7 +35,6 @@ By running this tool you are accepting the following:
 | **Windows Update** | Your system will no longer receive security patches |
 | **Windows Defender** | Temporarily during run so it doesnt interfere with windows settings changes |
 | **Spectre & Meltdown mitigations** | Known CPU side-channel vulnerabilities are re-exposed |
-| **UAC (User Account Control)** | Any software on your PC gains silent administrator access |
 | **Core Isolation / Memory Integrity** | Kernel-level exploit protection is removed |
 | **TLS 1.0 / TLS 1.1** | Some legacy software or internal network tools may stop working |
 | **SMB1** | Legacy file sharing (rarely needed, known ransomware vector) |
@@ -107,7 +106,6 @@ Cuts Windows hung-application and service kill timeouts from their defaults (5�
 - Disables Live Tiles notification push
 - Disables Windows Ink Workspace
 - Sets GPU power transition latency values to their minimum (1ms) — prevents the GPU driver from introducing delays during D3 power state transitions
-- **Disables UAC entirely** — see warning above. Zero performance benefit but included as many gaming tools and anti-cheat systems interact more reliably without UAC elevation prompts
 
 ---
 
@@ -410,9 +408,6 @@ The large `GraphicsDrivers\Power` latency registry block and most of the AFD par
 ## 🛡️ Restoring Security
 
 ```batch
-:: Re-enable UAC
-reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 1 /f
-
 :: Re-enable Spectre/Meltdown mitigations
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverride" /t REG_DWORD /d 0 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverrideMask" /t REG_DWORD /d 3 /f
