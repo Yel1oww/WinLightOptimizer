@@ -86,7 +86,7 @@ A single `.bat` file that combines three tools into one interactive menu. No ins
 
 ---
 
-## 📋 Option 1 — System Optimizations (27 Steps)
+## 📋 Option 1 — System Optimizations (31 Steps)
 
 Each step is tracked individually. The summary at the end shows exactly which steps passed and which failed, with a note that many failures are harmless (unsupported registry key on your Windows version, a service that does not exist on your hardware, etc.).
 
