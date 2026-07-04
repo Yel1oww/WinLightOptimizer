@@ -651,7 +651,7 @@ if !ERRORLEVEL! neq 0 (
         :: Try setactive now - will fail silently if Modern Standby is still active (needs reboot first)
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
         :: Write registry regardless - covers both immediate and post-reboot activation paths
-        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1 || set STEP_ERR=1
+        REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
         REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
         :: Apply CPU idle-disable directly to the plan GUID
         powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
@@ -1984,28 +1984,30 @@ if "!ERRORLEVEL!"=="0" (
     echo  - ISLC is already running. Skipping install.
 ) else (
     if not exist "!AppDir!" mkdir "!AppDir!" >nul 2>&1
-    
-    :: Download Exe
+
+    :: Download exe only if not already present
     if not exist "!AppDir!\!ExeName!" (
         curl -s -L -o "!AppDir!\!ExeName!" "!ExeUrl!"
         if !ERRORLEVEL! neq 0 set STEP_ERR=1
     )
-    
-    :: Download Config
-    if not exist "!AppDir!\!ConfigName!" (
-        curl -s -L -o "!AppDir!\!ConfigName!" "!ConfigUrl!"
-        if !ERRORLEVEL! neq 0 set STEP_ERR=1
-    )
-    
-    :: Calculate RAM, update config, and launch
-    if exist "!AppDir!\!ConfigName!" (
-        set "PSCommand=$ramBytes = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory; $halfRamMB = [math]::Round($ramBytes / 1048576 / 2); $conf = '!AppDir!\!ConfigName!'; $text = Get-Content $conf -Raw; $text = $text -replace '(<setting name=\"WantedFreeRAM\" serializeAs=\"String\">\s*<value>)\d+(</value>)', \"`${1}$halfRamMB`${2}\"; Set-Content -Path $conf -Value $text"
-        powershell -NoProfile -Command "!PSCommand!" >nul 2>&1
-        if !ERRORLEVEL! neq 0 set STEP_ERR=1
-        
-        :: Launch minimized
+
+    :: Always download config fresh so RAM threshold is recalculated correctly each run
+    curl -s -L -o "!AppDir!\!ConfigName!" "!ConfigUrl!"
+    if !ERRORLEVEL! neq 0 set STEP_ERR=1
+
+    :: Update Free memory value to half of installed RAM
+    :: Config uses appSettings format: <add key="Free memory" value="XXXX" />
+    powershell -NoProfile -Command "$half=[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB/2);$p='!AppDir!\!ConfigName!';$t=[IO.File]::ReadAllText($p);$t=[regex]::Replace($t,'(<add key=""Free memory"" value="")\d+("")',"`${1}$half`${2}");[IO.File]::WriteAllText($p,$t)" >nul 2>&1
+    if !ERRORLEVEL! neq 0 set STEP_ERR=1
+
+    :: Create persistent scheduled task to launch ISLC at every user logon
+    powershell -NoProfile -Command "$exe='!AppDir!\!ExeName!';$a=New-ScheduledTaskAction -Execute $exe -Argument '-minimized';$t=New-ScheduledTaskTrigger -AtLogOn;$s=New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -MultipleInstances IgnoreNew;Register-ScheduledTask -TaskName 'ISLC_AutoStart' -Action $a -Trigger $t -Settings $s -RunLevel Highest -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
+    if !ERRORLEVEL! neq 0 set STEP_ERR=1
+
+    :: Launch ISLC minimized right now for this session
+    if exist "!AppDir!\!ExeName!" (
         pushd "!AppDir!"
-        start "" /MIN "!ExeName!"
+        start "" /MIN "!ExeName!" -minimized
         popd
     )
 )
