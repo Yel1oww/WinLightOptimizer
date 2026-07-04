@@ -1978,8 +1978,8 @@ set "ConfigName=Intelligent standby list cleaner ISLC.exe.Config"
 set "ExeUrl=https://raw.githubusercontent.com/Yel1oww/WinLightOptimizer/main/Intelligent%%20standby%%20list%%20cleaner%%20ISLC.exe"
 set "ConfigUrl=https://raw.githubusercontent.com/Yel1oww/WinLightOptimizer/main/Intelligent%%20standby%%20list%%20cleaner%%20ISLC.exe.Config"
 
-:: Check if already running
-tasklist /FI "IMAGENAME eq !ExeName!" 2>NUL | find /I "!ExeName!" >NUL
+:: Check if already running using wmic (tasklist truncates long names)
+wmic process where "name='!ExeName!'" get processid 2>NUL | findstr [0-9] >NUL
 if "!ERRORLEVEL!"=="0" (
     echo  - ISLC is already running. Skipping install.
 ) else (
@@ -1996,8 +1996,8 @@ if "!ERRORLEVEL!"=="0" (
     if !ERRORLEVEL! neq 0 set STEP_ERR=1
 
     :: Update Free memory value to half of installed RAM
-    :: Config uses appSettings format: <add key="Free memory" value="XXXX" />
-    powershell -NoProfile -Command "$half=[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB/2);$p='!AppDir!\!ConfigName!';$t=[IO.File]::ReadAllText($p);$t=[regex]::Replace($t,'(<add key=""Free memory"" value="")\d+("")',"`${1}$half`${2}");[IO.File]::WriteAllText($p,$t)" >nul 2>&1
+    :: Uses char 34 to avoid batch double-quote parsing crashes inside the else block
+    powershell -NoProfile -Command "$q=[char]34;$half=[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB/2);$p='!AppDir!\!ConfigName!';$t=[IO.File]::ReadAllText($p);$t=[regex]::Replace($t,'(<add key='+$q+'Free memory'+$q+' value='+$q+')\d+('+$q+')','${1}'+$half+'${2}');[IO.File]::WriteAllText($p,$t)" >nul 2>&1
     if !ERRORLEVEL! neq 0 set STEP_ERR=1
 
     :: Create persistent scheduled task to launch ISLC at every user logon
