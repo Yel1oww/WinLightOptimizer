@@ -282,7 +282,7 @@ REG ADD "HKLM\System\CurrentControlSet\Control\Network" /v "NewNetworkWindowOff"
 :: Disable IPv6 on all adapters and system-wide
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" /v "DisabledComponents" /t REG_DWORD /d 0xFF /f >nul 2>&1 || set STEP_ERR=1
 powershell -NoProfile -Command "Get-NetAdapter | ForEach-Object { Disable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue }" >nul 2>&1
-:: Set DNS: primary 1.1.1.1, secondary 8.8.8.8 on all active adapters
+:: Set DNS: primary 192.168.0.202, secondary 192.168.0.201 on all active adapters
 powershell -NoProfile -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ServerAddresses @('1.1.1.1','8.8.8.8') }" >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
     echo  [OK] Network Tweaks
@@ -1944,7 +1944,7 @@ if !ERRORLEVEL! neq 0 (
 
 :: Apply NIP profile via Profile Inspector - writes settings directly to NVIDIA driver database
 echo  Applying NVIDIA 3D profile...
-"!_NVPI!" "!_NVNIP!" >nul 2>&1
+start /WAIT "" "!_NVPI!" "!_NVNIP!"
 if !ERRORLEVEL! neq 0 set STEP_ERR=1
 
 :: Registry backup - enables "Use advanced 3D image settings" in NVIDIA Control Panel
