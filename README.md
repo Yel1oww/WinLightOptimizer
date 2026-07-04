@@ -367,7 +367,7 @@ Automatically skipped on non-NVIDIA systems. On systems with an NVIDIA GPU — i
 ## 🎮 Option 4 — Windows Activation
 Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev) to activate Windows. Requires internet connection. Follow the on-screen prompts.
 
-This was moved out of the optimization steps so it can be run independently at any time without re-running all 31 optimization steps.
+This was moved out of the optimization steps so it can be run independently at any time without re-running all optimization steps.
 
 ---
 
