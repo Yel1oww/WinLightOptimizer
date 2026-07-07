@@ -742,21 +742,15 @@ if !ERRORLEVEL! neq 0 (
         powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
-        powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 "WinLO" "Win Light Optimizer Performance Plan" >nul 2>&1
-        :: Create a self-deleting startup task to force WinLO active on next boot
-        :: Runs 10 seconds after startup (gives power manager time to finish init)
-        :: then deletes itself so it only ever fires once
-        powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c timeout /t 10 /nobreak >nul && powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 && powercfg -changename e62924f9-da5f-42c4-9c17-926bc1804ab8 WinLO \"Win Light Optimizer Performance Plan\" && schtasks /delete /tn WinLOActivatePlan /f';$t=New-ScheduledTaskTrigger -AtStartup;Register-ScheduledTask -TaskName WinLOActivatePlan -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force -ErrorAction SilentlyContinue|Out-Null" >nul 2>&1
-    )
 )
 :: Cleanup temp files
 if exist "!_POWTMP_B64!" del "!_POWTMP_B64!" >nul 2>&1
 if exist "!_POWTMP!" del "!_POWTMP!" >nul 2>&1
 if !STEP_ERR!==0 (
-    echo  [OK] WinLO Power Plan
+    echo  [OK] Core Power Plan
     set /a PASS+=1
 ) else (
-    echo  [FAIL] WinLO Power Plan
+    echo  [FAIL] Core Power Plan
     set /a FAIL+=1
     echo Core Power Plan>> "!_FAILS!"
 )
