@@ -12,15 +12,15 @@
 
 ## 🔴 IMPORTANT — After Rebooting, Check Your Power Plan
 
-> **After the script finishes and you restart your PC, open Power Options and make sure the WinLO plan is selected.**
+> **After the script finishes and you restart your PC, open Power Options and make sure the CoreVeeAir plan is selected.**
 
 After reboot, go to: **Control Panel → Hardware and Sound → Power Options**
 
-You should see **WinLO** listed. Click the radio button next to it to make sure it is the active plan.
+You should see **CoreVeeAir's** listed. Click the radio button next to it to make sure it is the active plan.
 
-**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the WinLO plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (WinLO)** — a loss of 50 frames just from having the wrong power plan active.
+**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the CoreVeeAir plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (WinLO)** — a loss of 50 frames just from having the wrong power plan active.
 
-If WinLO is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
+If CoreVeeAir is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
 
 ---
 
@@ -83,7 +83,7 @@ A single `.bat` file that combines three tools into one interactive menu. No ins
 1. **Right-click** `WinLightOptimizer.bat` → **Run as Administrator**
 2. Select an option from the menu
 3. After Option 1, **restart your PC** — many changes require a reboot to take full effect
-4. After rebooting, verify your power plan is active: open Power Options and confirm **WinLO** is selected
+4. After rebooting, verify your power plan is active: open Power Options and confirm **CoreVeeAir** is selected
 
 > The Core.pow custom power plan is embedded directly inside the script — no extra files needed.
 
@@ -200,7 +200,7 @@ Domains blocked: `vortex.data.microsoft.com`, `settings-win.data.microsoft.com`,
 
 ---
 
-### Step 13 — Core Power Plan (WinLO)
+### Step 13 — Core Power Plan (CoreVeeAir)
 Imports and activates a custom power plan embedded directly in the script as base64, decoded at runtime using PowerShell's `[IO.File]::WriteAllBytes` rather than certutil (which Defender flags as suspicious).
 
 The activation sequence is:
@@ -209,7 +209,7 @@ The activation sequence is:
 3. **Verify** the GUID appears in `powercfg -list` before proceeding — if import failed silently, stop and report failure rather than pointing Windows at a missing scheme (which causes severe throttling)
 4. Run `powercfg -setactive e62924f9-...` for immediate activation
 5. Always write `ActivePowerScheme` to the registry too — ensures the plan is selected after reboot on **Modern Standby (S0)** systems where `powercfg -setactive` is blocked until `PlatformAoAcOverride=0` takes effect
-6. Apply CPU idle-disable settings **directly to the WinLO plan GUID** so the plan carries its own performance profile and does not depend on prior state
+6. Apply CPU idle-disable settings **directly to the CoreVeeAir plan GUID** so the plan carries its own performance profile and does not depend on prior state
 
 ---
 
