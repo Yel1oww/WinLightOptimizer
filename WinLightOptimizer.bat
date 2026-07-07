@@ -259,7 +259,6 @@ REG ADD "HKCU\SYSTEM\GameConfigStore" /v "GameDVR_HonorUserFSEBehaviorMode" /t R
 :: DWM flip queue and Multi Plane Overlay
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\Dwm"                  /v "FlipQueueSize"    /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "DisableFlipModel" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SOFTWARE\Microsoft\Windows\Dwm"                  /v "OverlayTestMode"  /t REG_DWORD /d 5 /f >nul 2>&1 || set STEP_ERR=1
 :: DirectX windowed swap effect upgrades
 REG ADD "HKCU\Software\Microsoft\DirectX\GraphicsSettings"    /v "SwapEffectUpgradeEnable"   /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\Software\Microsoft\DirectX\GraphicsSettings"    /v "SwapEffectUpgradeCache"    /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -267,8 +266,6 @@ REG ADD "HKCU\SOFTWARE\Microsoft\DirectX\UserGpuPreferences"  /v "DirectXUserGlo
 :: Additional GPU scheduler settings
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler" /v "EnableReclaim"       /t REG_DWORD /d 1  /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler" /v "EnableExplicitVidMm" /t REG_DWORD /d 1  /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"             /v "TdrDelay"            /t REG_DWORD /d 10 /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"             /v "TdrDdiDelay"         /t REG_DWORD /d 10 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"             /v "FrameLatency"        /t REG_DWORD /d 1  /f >nul 2>&1 || set STEP_ERR=1
 :: Direct3D and DirectX tuning
 REG ADD "HKLM\SOFTWARE\Microsoft\Direct3D\Drivers"  /v "SoftwareOnly"      /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -277,9 +274,6 @@ REG ADD "HKLM\SOFTWARE\Microsoft\DirectX"            /v "ForceGPUPreemption" /t 
 :: DXGKrnl monitor latency and TDR
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\DXGKrnl" /v "MonitorLatencyTolerance"        /t REG_DWORD /d 1  /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\DXGKrnl" /v "MonitorRefreshLatencyTolerance" /t REG_DWORD /d 1  /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\DXGKrnl" /v "TdrLevel"                       /t REG_DWORD /d 3  /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\DXGKrnl" /v "TdrDelay"                       /t REG_DWORD /d 10 /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\DXGKrnl" /v "TdrDdiDelay"                    /t REG_DWORD /d 10 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Power" /v "MonitorLatencyTolerance"        /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Power" /v "MonitorRefreshLatencyTolerance" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
@@ -410,8 +404,6 @@ REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\USB\Parameters" /v "ForceHCReset
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\USB" /v "DisableSelectiveSuspend" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\USBXHCI\Parameters" /v "DisableSelectiveSuspend" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 :: Disable hypervisor and VBS launch (complements Steps 19 and 20)
-bcdedit /set hypervisorlaunchtype off >nul 2>&1
-bcdedit /set vsmlaunchtype off >nul 2>&1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\HvHost"    /v "Start" /t REG_DWORD /d 4 /f >nul 2>&1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\vmsvc"     /v "Start" /t REG_DWORD /d 4 /f >nul 2>&1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Services\vmcompute" /v "Start" /t REG_DWORD /d 4 /f >nul 2>&1
@@ -429,13 +421,6 @@ if !STEP_ERR!==0 (
 :: ================================================
 echo [STEP 9/33] Applying Boot and CPU Scheduler Tweaks...
 set STEP_ERR=0
-bcdedit /set bootux disabled >nul 2>&1 || set STEP_ERR=1
-bcdedit /set tscsyncpolicy enhanced >nul 2>&1 || set STEP_ERR=1
-bcdedit /set uselegacyapicmode No >nul 2>&1 || set STEP_ERR=1
-bcdedit /set x2apicpolicy Enable >nul 2>&1 || set STEP_ERR=1
-bcdedit /deletevalue useplatformclock >nul 2>&1
-bcdedit /deletevalue useplatformtick >nul 2>&1
-bcdedit /set disabledynamictick yes >nul 2>&1
 if !STEP_ERR!==0 (
     echo  [OK] Boot and CPU Scheduler Tweaks
     set /a PASS+=1
@@ -1054,7 +1039,6 @@ set STEP_ERR=0
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "Enabled" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v "EnableVirtualizationBasedSecurity" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v "RequirePlatformSecurityFeatures" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
-bcdedit /set hypervisorlaunchtype off >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
     echo  [OK] Core Isolation and Memory Integrity
     set /a PASS+=1
@@ -2190,6 +2174,31 @@ if !STEP_ERR!==0 (
     echo ISLC Setup>> "!_FAILS!"
 )
 
+:: Re-enable Defender
+echo.
+echo Re-enabling Windows Defender...
+:: Remove the hosts folder exclusion we added at the start
+powershell -NoProfile -Command "Remove-MpPreference -ExclusionPath '$env:SystemRoot\System32\drivers\etc' -ErrorAction SilentlyContinue" >nul 2>&1
+:: Remove the policy registry keys we set (they take priority over UI settings when present)
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v "DisableAntiSpyware" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v "DisableAntiVirus" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableBehaviorMonitoring" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableOnAccessProtection" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableRealtimeMonitoring" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableScanOnRealtimeEnable" /f >nul 2>&1
+REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet" /v "DisableBlockAtFirstSeen" /f >nul 2>&1
+:: Restore Defender services to automatic and restart them
+sc config WinDefend start= auto >nul 2>&1
+sc config WdNisSvc start= auto >nul 2>&1
+net start WinDefend >nul 2>&1
+net start WdNisSvc >nul 2>&1
+:: Re-enable all Defender features (Core Isolation stays OFF - controlled by Step 19 registry keys)
+powershell -NoProfile -Command "Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableBlockAtFirstSeen $false -DisableIOAVProtection $false -DisablePrivacyMode $false -DisableScriptScanning $false -EnableNetworkProtection Enabled -EnableControlledFolderAccess Enabled -MAPSReporting Advanced -SubmitSamplesConsent SendSafeSamples -PUAProtection Enabled -ErrorAction SilentlyContinue" >nul 2>&1
+echo  [OK] Defender re-enabled
+echo.
+
+:: ================================================
+
 :: ================================================
 :: STEP 33 - Advanced Privacy Suite
 :: ================================================
@@ -2226,30 +2235,6 @@ if !STEP_ERR!==0 (
     echo Advanced Privacy Settings>> "!_FAILS!"
 )
 
-:: Re-enable Defender
-echo.
-echo Re-enabling Windows Defender...
-:: Remove the hosts folder exclusion we added at the start
-powershell -NoProfile -Command "Remove-MpPreference -ExclusionPath '$env:SystemRoot\System32\drivers\etc' -ErrorAction SilentlyContinue" >nul 2>&1
-:: Remove the policy registry keys we set (they take priority over UI settings when present)
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v "DisableAntiSpyware" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v "DisableAntiVirus" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableBehaviorMonitoring" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableOnAccessProtection" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableRealtimeMonitoring" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v "DisableScanOnRealtimeEnable" /f >nul 2>&1
-REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet" /v "DisableBlockAtFirstSeen" /f >nul 2>&1
-:: Restore Defender services to automatic and restart them
-sc config WinDefend start= auto >nul 2>&1
-sc config WdNisSvc start= auto >nul 2>&1
-net start WinDefend >nul 2>&1
-net start WdNisSvc >nul 2>&1
-:: Re-enable all Defender features (Core Isolation stays OFF - controlled by Step 19 registry keys)
-powershell -NoProfile -Command "Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableBlockAtFirstSeen $false -DisableIOAVProtection $false -DisablePrivacyMode $false -DisableScriptScanning $false -EnableNetworkProtection Enabled -EnableControlledFolderAccess Enabled -MAPSReporting Advanced -SubmitSamplesConsent SendSafeSamples -PUAProtection Enabled -ErrorAction SilentlyContinue" >nul 2>&1
-echo  [OK] Defender re-enabled
-echo.
-
-:: ================================================
 :: RESULTS SUMMARY
 :: ================================================
 
