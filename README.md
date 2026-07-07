@@ -12,15 +12,15 @@
 
 ## 🔴 IMPORTANT — After Rebooting, Check Your Power Plan
 
-> **After the script finishes and you restart your PC, open Power Options and make sure the CoreVeeAir's plan is selected.**
+> **After the script finishes and you restart your PC, open Power Options and make sure the WinLO plan is selected.**
 
 After reboot, go to: **Control Panel → Hardware and Sound → Power Options**
 
-You should see **CoreVeeAir's** listed. Click the radio button next to it to make sure it is the active plan.
+You should see **WinLO** listed. Click the radio button next to it to make sure it is the active plan.
 
-**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the CoreVeeAir's plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (CoreVeeAir's)** — a loss of 50 frames just from having the wrong power plan active.
+**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the WinLO plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (WinLO)** — a loss of 50 frames just from having the wrong power plan active.
 
-If CoreVeeAir's is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
+If WinLO is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
 
 ---
 
@@ -71,7 +71,7 @@ A single `.bat` file that combines three tools into one interactive menu. No ins
 
 | Option | Tool | Purpose |
 |--------|------|---------|
-| `[1]` | **System Optimizations** | 32-step aggressive Windows configuration for gaming |
+| `[1]` | **System Optimizations** | 33-step aggressive Windows configuration for gaming |
 | `[2]` | **Clean Temp Files** | Frees disk space by removing system junk |
 | `[3]` | **Windows Update Toggle** | Disable or fully restore Windows Update on demand |
 | `[4]` | **Windows Activation** | Activate Windows using MAS (Microsoft Activation Scripts) |
@@ -89,7 +89,7 @@ A single `.bat` file that combines three tools into one interactive menu. No ins
 
 ---
 
-## 📋 Option 1 — System Optimizations (32 Steps)
+## 📋 Option 1 — System Optimizations (33 Steps)
 
 Each step is tracked individually. The summary at the end shows exactly which steps passed and which failed, with a note that many failures are harmless (unsupported registry key on your Windows version, a service that does not exist on your hardware, etc.).
 
@@ -133,6 +133,12 @@ Disables Adaptive Refresh Rate management, Panel Self-Refresh, and Video Idle Ti
 - Enables GPU Boost
 - Disables the GPU Energy Driver which throttles GPU clocks for power saving
 - Enables **Hardware-Accelerated GPU Scheduling (HAGS)** — the GPU manages its own memory scheduling without going through the CPU, reducing CPU-to-GPU latency. Requires NVIDIA RTX 2000+ or AMD RX 5000+
+- **GameConfigStore** — fullscreen/windowed optimization flags (FSEBehaviorMode, DSEBehavior, EFSEFeatureFlags)
+- **SwapEffectUpgrade** — enables DirectX windowed game optimizations (`SwapEffectUpgradeEnable=1`)
+- **DirectXUserGlobalSettings** — global DirectX GPU preferences for swap effect upgrades
+- **GPU Scheduler additions** — `EnableReclaim=1`, `EnableExplicitVidMm=1`, `FrameLatency=1`
+- **Direct3D tuning** — `DisableDebugLayer=1`, `ForceGPUPreemption=1`
+- **DXGKrnl monitor latency** — `MonitorLatencyTolerance=1`, `MonitorRefreshLatencyTolerance=1`
 
 ---
 
@@ -158,16 +164,13 @@ Disables Adaptive Refresh Rate management, Panel Self-Refresh, and Video Idle Ti
 ---
 
 ### Step 9 — Boot & CPU Scheduler Tweaks
-Uses bcdedit to configure low-level scheduler and boot behaviour:
+Uses bcdedit to configure low-level boot behaviour. Note: the more aggressive timer and clock settings (tscsyncpolicy, x2apicpolicy, disabledynamictick, useplatformclock/tick) have been removed from this step — they caused alt+tab crashes and full in-game crashes on some hardware combinations (particularly in CS2 and other fullscreen exclusive titles).
+
+What remains is stable across all tested hardware:
 
 | Setting | Effect |
 |---------|--------|
-| `tscsyncpolicy enhanced` | Most accurate CPU clock sync across cores |
-| `x2apicpolicy Enable` | Extended APIC interrupt controller, lower interrupt latency |
-| `disabledynamictick yes` | **Fixed timer tick** — eliminates frame time variance from dynamic OS wakeups |
-| Remove `useplatformclock` | Forces CPU TSC as timing source (faster than HPET on modern CPUs) |
-| Remove `useplatformtick` | Paired with the above |
-| `bootux disabled` | Removes Windows boot animation |
+| `bootux normal` | Standard Windows boot (no animation removal that could conflict) |
 
 ---
 
@@ -364,167 +367,8 @@ Automatically skipped on non-NVIDIA systems. On systems with an NVIDIA GPU — i
 
 ---
 
-## 🎮 Option 4 — Windows Activation
-Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev) to activate Windows. Requires internet connection. Follow the on-screen prompts.
-
-This was moved out of the optimization steps so it can be run independently at any time without re-running all optimization steps.
 
 ---
-
-## 🧹 Option 2 — Clean Temp Files
-
-Clears system junk and reports disk space freed before and after.
-
-| Step | What it does |
-|------|-------------|
-| Windows Temp | Deletes and recreates `%SystemRoot%\Temp` |
-| User Temp | Clears `%TEMP%` |
-| Prefetch | Removes prefetch files (rebuilt on next boot) |
-| Update Cache | Stops WU services, clears `SoftwareDistribution\Download`, restarts |
-| Log Files | Deletes `.log` files from system log paths |
-| Event Viewer | Clears all event log channels via `wevtutil cl` |
-| DNS Cache | `ipconfig /flushdns` |
-| Winsock | `netsh winsock reset` |
-| Recycle Bin | Empties `C:\$Recycle.Bin` |
-| Disk Cleanup | Runs `cleanmgr /sagerun:1` silently |
-
----
-
-## 🔄 Option 3 — Windows Update Toggle
-
-### Disable
-- Adds Group Policy keys blocking all Windows Update internet access
-- Sets `NoAutoUpdate = 1`
-- Disables and stops `dosvc`, `wuauserv`, `UsoSvc`
-
-### Enable
-- Removes all blocking policy keys
-- Restores `dosvc`, `wuauserv`, `UsoSvc`, `bits`, `cryptsvc`, `TrustedInstaller` to automatic startup
-- Starts all services
-
----
-
-## 🔬 Honest Assessment
-
-**Genuinely effective:**
-Spectre/Meltdown mitigation removal, Core Isolation disable, CPU idle states off, HAGS, ULPS off, USB Selective Suspend off, fixed pagefile, `disabledynamictick`, audio enhancement disable, service and task cleanup (especially on lower-end systems).
-
-**Small but real:**
-DNS to 1.1.1.1, Win32PrioritySeparation, MMCSS tuning, network buffer tweaks.
-
-**Mostly placebo on modern Windows 10/11:**
-The large `GraphicsDrivers\Power` latency registry block and most of the AFD parameter list — circulated from Windows 7-era guides, not shown to affect modern systems in controlled testing.
-
----
-
-## 🛡️ Restoring Security
-
-```batch
-:: Re-enable UAC
-reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 1 /f
-
-:: Re-enable Spectre/Meltdown mitigations
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverride" /t REG_DWORD /d 0 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "FeatureSettingsOverrideMask" /t REG_DWORD /d 3 /f
-
-:: Re-enable Core Isolation
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "Enabled" /t REG_DWORD /d 1 /f
-```
-
-Reboot after running. Use Option 3 in the toolkit to re-enable Windows Update.
-
----
-
-## 📁 Files
-
-| File | Description |
-|------|-------------|
-| `WinLightOptimizer.bat` | The only file you need — all tools in one file |
-| `Core.pow` | Custom power plan source (already embedded in the bat, not required separately) |
-
----
-
-## ⚙️ Requirements
-
-- Windows 10 or Windows 11 (x64)
-- Run as Administrator
-- PowerShell 5.0+ (included in all Windows 10/11 builds)
-- Internet required only for Option 4 (Windows Activation) and Step 31 (NVIDIA Profile Inspector download on NVIDIA systems)
-
----
-
-## 📜 Disclaimer
-
-Win Light Optimizer is provided as-is with no warranty of any kind. By using this tool you confirm that you understand and accept every security tradeoff described above, you are running this on a machine you own, and you take full responsibility for any consequences.
-
-**This project is not affiliated with or endorsed by Microsoft.**
-
----
-
-### Step 27 — Microsoft Edge Complete Removal
-Physically removes Edge rather than just disabling it via policy:
-- Kills all Edge processes
-- Deletes `%LOCALAPPDATA%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\Edge`, `%ProgramFiles(x86)%\Microsoft\EdgeCore`, `%ProgramFiles(x86)%\Microsoft\EdgeUpdate`
-- Removes all Edge shortcuts from Desktop and Start Menu
-- Removes Edge registry entries from HKLM and HKCU
-- Adds EdgeUpdate policy keys blocking reinstallation of both the stable and WebView2 channels
-- Creates dummy folders at the original Edge paths and locks them (`icacls /deny`) so Windows Update cannot write back to those locations to reinstall Edge
-
----
-
-### Step 28 — OneDrive Complete Uninstall
-Goes further than just disabling the sync service (which was in Step 16):
-- Kills the OneDrive process
-- Runs Microsoft's own official uninstallers (`SysWOW64\OneDriveSetup.exe /uninstall` and `System32\OneDriveSetup.exe /uninstall`) — these properly clean up OneDrive's own internal state
-- Removes all OneDrive data folders (`%LOCALAPPDATA%\Microsoft\OneDrive`, `%ProgramData%\Microsoft\OneDrive`, `%USERPROFILE%\OneDrive`, `%SystemDrive%\OneDriveTemp`)
-- Removes all OneDrive shortcuts from Desktop and Start Menu
-- Removes OneDrive from startup registry
-- Adds policy keys blocking OneDrive file sync from being re-enabled (`DisableFileSyncNGSC`, `DisableLibrariesDefaultSaveToOneDrive`)
-- Restarts Explorer to update the sidebar
-
----
-
-### Step 29 — Microsoft Store Bloatware Removal
-Removes ~60 pre-installed Microsoft Store apps for all users and from the provisioned package list (so they do not reinstall for new user accounts). Uses `Remove-AppxPackage -AllUsers` and `Remove-AppxProvisionedPackage -Online` for each.
-
-Apps removed include:
-- **Microsoft apps:** Clipchamp, 3D Builder, Cortana, Bing Finance/News/Sports/Translator/Weather, Copilot, Getstarted, Messaging, 3D Viewer, MicrosoftJournal, Office Hub, Solitaire Collection, Sticky Notes, Mixed Reality Portal, Speed Test, News, OneNote (Store), Sway, Print3D, Power Automate Desktop, Skype, Todos, DevHome, Alarms, Feedback Hub, Maps, Sound Recorder, Xbox App, Zune Video, Microsoft Family, Quick Assist, Teams (both old and new versions)
-- **Third-party pre-installs:** Adobe Photoshop Express, Amazon Shopping, Prime Video, Disney, Drawboard PDF, Duolingo, Facebook, Flipboard, Hulu, iHeartRadio, Instagram, Candy Crush (Saga, Soda, Bubble Witch), LinkedIn, Netflix, Pandora, Plex, Spotify, TikTok, TuneIn Radio, Twitter/X, Viber, WinZip
-
----
-
-### Step 30 — Additional UI & System Tweaks
-A collection of quality-of-life and debloat changes:
-
-| Tweak | What it does |
-|-------|-------------|
-| **Intel LMS disabled** | Intel Management and Security Status service — allows remote control capabilities on Intel platforms. No gaming benefit, small attack surface |
-| **WPBT execution disabled** | Stops OEM vendor startup scripts that are embedded in BIOS/UEFI firmware and survive Windows reinstalls |
-| **WifiSense disabled** | Prevents Windows from automatically connecting to WiFi networks shared by contacts and auto-reporting hotspot usage |
-| **Paint AI disabled** | Disables Microsoft Cocreator AI features in Paint (Windows 11 24H2+) |
-| **Notepad AI disabled** | Disables AI rewrite and summarise features in Notepad (Windows 11 24H2+) |
-| **Remove Home from File Explorer** | Removes the Home hub from the sidebar, sets This PC as the default view |
-| **Remove Gallery from File Explorer** | Removes the AI-powered Gallery feature from the sidebar |
-| **Show file extensions** | `HideFileExt = 0` — file extensions are hidden by default in Windows, which is a genuine security risk (attackers name files `photo.jpg.exe`) |
-| **Windows 10 right-click menu** | Restores the full context menu on Windows 11, removing the extra "Show more options" click |
-| **Left-align taskbar** | `TaskbarAl = 0` — moves taskbar icons back to the left, Windows 11 defaults to centre |
-| **Hide Search icon** | `SearchboxTaskbarMode = 0` — removes the Search button/box from the taskbar |
-| **Instant taskbar previews** | `ExtendedUIHoverTime = 1` — window thumbnail previews appear instantly on hover instead of after a delay |
-| **Microsoft 365 / OneDrive ads** | `ShowSyncProviderNotifications = 0` — stops OneDrive and 365 from showing promotional notifications in Explorer |
-| **Hide Settings Home** | Hides the Windows 11 Settings Home page entirely via `SettingsPageVisibility = hide:home` |
-| **Clear Start Menu pins** | Deletes `LayoutModification.xml` — removes all pinned apps from the Start Menu, leaving it clean |
-
-Explorer is restarted at the end to apply all UI changes immediately.
-
----
-
-### Step 31 — NVIDIA 3D Profile (NVIDIA GPUs only)
-Automatically skipped on non-NVIDIA systems. On systems with an NVIDIA GPU — including laptops where the discrete GPU is the second adapter listed — this step:
-
-1. **Detects the GPU** using `wmic path win32_VideoController` which queries all video controllers so discrete laptop GPUs are caught even when the iGPU is listed first
-2. **Downloads NVIDIA Profile Inspector** at runtime from the project GitHub (the portable `.exe` is deleted immediately after use)
-3. **Applies a custom NIP profile** embedded directly in the script as base64 — decoded, applied via `nvidiaProfileInspector.exe profile.nip` which writes settings directly to the NVIDIA driver database, then deleted
-4. **Writes `Splendid=1`** to `HKCU\Software\NVIDIA Corporation\Global\NVTweak` — this enables "Use advanced 3D image settings" in NVIDIA Control Panel at the UI level (the NIP handles the driver level, the registry handles the UI toggle)
 
 ### Step 32 — ISLC Setup
 Automatically downloads and configures Intelligent Standby List Cleaner (ISLC) to prevent memory-related stuttering in games.
@@ -535,6 +379,36 @@ Automatically downloads and configures Intelligent Standby List Cleaner (ISLC) t
 
 ---
 
+
+---
+
+### Step 33 — Advanced Privacy Settings
+Downloads and silently applies **O&O ShutUp10++** with a curated 296-setting privacy configuration. Requires internet connection. Covers settings not accessible via standard registry tweaks, organised into categories:
+
+- **Privacy** — handwriting data, advertising ID, CEIP, typing telemetry, app notifications, language sharing
+- **Activity History & Clipboard** — disables activity recording, clipboard history, cross-device clipboard sync
+- **App Privacy** — per-category app access controls: account info, diagnostics, location, camera, microphone, voice activation, contacts, calendar, call history, email, tasks, messages, wireless, documents, images, videos, file system, screenshots, music library, downloads
+- **Security** — password reveal button, user steps recorder, telemetry reporting
+- **Microsoft Edge** — comprehensive Edge tracking, autofill, payment methods, personalisation, shopping assistant, sidebar, Copilot, AI features, diagnostics, startup boost, new tab content, spell checking, SmartScreen
+- **Settings Synchronisation** — disables all sync: design, browser settings, credentials, language, accessibility, advanced Windows settings
+- **Cortana & Copilot** — Cortana, online speech recognition, cloud search, Copilot button, Recall, Paint AI (Cocreator), Notepad AI
+- **Location Services** — all location service components
+- **User Behaviour** — application telemetry, diagnostic data, log collection, OneSettings downloads
+- **Windows Update** — P2P update sharing, driver updates, speech module updates, automatic app updates
+- **Windows Explorer** — app suggestions in Start, recently opened items in Jump Lists, OneDrive ads
+- **Taskbar** — People icon, search box, Meet Now, News and Interests
+- **Miscellaneous** — feedback reminders, Store app auto-installation, Windows Media diagnostics, remote assistance, map data auto-updates, Phone Link / mobile device access
+
+
+
+## 🎮 Option 4 — Windows Activation
+Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev) to activate Windows. Requires internet connection. Follow the on-screen prompts.
+
+This was moved out of the optimization steps so it can be run independently at any time without re-running all optimization steps.
+
+---
+
+
 ## 🧹 Option 2 — Clean Temp Files
 
 Clears system junk and reports disk space freed before and after.
@@ -568,17 +442,10 @@ Clears system junk and reports disk space freed before and after.
 
 ---
 
-## 🎮 Option 4 — Windows Activation
-Runs [MAS (Microsoft Activation Scripts)](https://massgrave.dev) to activate Windows. Requires internet connection. Follow the on-screen prompts.
-
-This was moved out of the optimization steps so it can be run independently at any time without re-running all 31 optimization steps.
-
----
-
 ## 🔬 Honest Assessment
 
 **Genuinely effective:**
-Spectre/Meltdown mitigation removal, Core Isolation disable, CPU idle states off, HAGS, ULPS off, USB Selective Suspend off, fixed pagefile, `disabledynamictick`, audio enhancement disable, service and task cleanup (especially on lower-end systems).
+Spectre/Meltdown mitigation removal, Core Isolation disable, CPU idle states off, HAGS, ULPS off, USB Selective Suspend off, fixed pagefile, audio enhancement disable, service and task cleanup (especially on lower-end systems).
 
 **Small but real:**
 DNS to 1.1.1.1, Win32PrioritySeparation, MMCSS tuning, network buffer tweaks.
@@ -629,3 +496,5 @@ Reboot after running. Use Option 3 in the toolkit to re-enable Windows Update.
 Win Light Optimizer is provided as-is with no warranty of any kind. By using this tool you confirm that you understand and accept every security tradeoff described above, you are running this on a machine you own, and you take full responsibility for any consequences.
 
 **This project is not affiliated with or endorsed by Microsoft.**
+
+---
