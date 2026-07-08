@@ -18,7 +18,7 @@ After reboot, go to: **Control Panel → Hardware and Sound → Power Options**
 
 You should see **CoreVeeAir's** listed. Click the radio button next to it to make sure it is the active plan.
 
-**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the CoreVeeAir plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (WinLO)** — a loss of 50 frames just from having the wrong power plan active.
+**Why this matters:** The power plan is imported and activated during the script run, but on some systems — particularly those with Modern Standby (S0) — Windows reverts to the default Balanced plan after rebooting. This has been tested directly: running without the CoreVeeAir plan selected causes a significant FPS drop. On Black Desert Online for example, the difference was **270 FPS (Balanced) vs 320 FPS (CoreVeeAir's)** — a loss of 50 frames just from having the wrong power plan active.
 
 If CoreVeeAir is not listed at all, re-run the script and run Option 1 again — Step 13 will re-import and re-activate it.
 
