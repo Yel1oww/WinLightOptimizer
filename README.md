@@ -53,7 +53,7 @@ If you do not understand what a step does, **do not run this tool.**
 
 ## 🧰 What is Win Light Optimizer?
 
-A single `.bat` file that combines three tools into one interactive menu. No installers, no dependencies beyond what Windows already has.
+A single `.bat` file that combines four tools into one interactive menu. No installers, no dependencies beyond what Windows already has.
 
 ```
   =====================================================
