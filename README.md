@@ -35,7 +35,6 @@ By running this tool you are accepting the following:
 | **Windows Update** | Your system will no longer receive security patches |
 | **Windows Defender** (temporarily during run) | Malware could execute undetected during the optimization window |
 | **Spectre & Meltdown mitigations** | Known CPU side-channel vulnerabilities are re-exposed |
-| **UAC (User Account Control)** | Any software on your PC gains silent administrator access |
 | **Core Isolation / Memory Integrity** | Kernel-level exploit protection is removed |
 | **TLS 1.0 / TLS 1.1** | Some legacy software or internal network tools may stop working |
 | **SMB1** | Legacy file sharing (rarely needed, known ransomware vector) |
@@ -111,13 +110,11 @@ Cuts Windows hung-application and service kill timeouts from their defaults (5�
 - Disables Live Tiles notification push
 - Disables Windows Ink Workspace
 - Sets GPU power transition latency values to their minimum (1ms) — prevents the GPU driver from introducing delays during D3 power state transitions
-- **Disables UAC entirely** — see warning above. Zero performance benefit but included as many gaming tools and anti-cheat systems interact more reliably without UAC elevation prompts
 
 ---
 
 ### Step 4 — CPU Tweaks
 - **Win32PrioritySeparation = 42 — long quantum, variable, maximum foreground boost. Value 2 (Windows default) favours input latency and is better for competitive shooters. Value 42 uses longer CPU time quanta per thread, giving better raw FPS in CPU-heavy engines. Tested on Black Desert Online: +50 FPS with 42 over 2 (270 vs 320). For open world or simulation-heavy games, 42 wins on frames. For competitive shooters prioritising input latency, consider 2
-- **CPU idle states disabled** — prevents the processor from entering C-states between frames, eliminating the latency spike when a core wakes from deep sleep. Increases idle heat and power draw — acceptable on a desktop, noticeable on a laptop
 - **CsEnabled = 0** — disables Connected Standby / Modern Standby, required on some Windows 11 systems before custom power plans can be selected
 - **Power Throttling disabled** — stops Windows from deprioritising threads it considers background work, which can incorrectly throttle game threads on hybrid-core CPUs
 
@@ -209,7 +206,7 @@ The activation sequence is:
 3. **Verify** the GUID appears in `powercfg -list` before proceeding — if import failed silently, stop and report failure rather than pointing Windows at a missing scheme (which causes severe throttling)
 4. Run `powercfg -setactive e62924f9-...` for immediate activation
 5. Always write `ActivePowerScheme` to the registry too — ensures the plan is selected after reboot on **Modern Standby (S0)** systems where `powercfg -setactive` is blocked until `PlatformAoAcOverride=0` takes effect
-6. Apply CPU idle-disable settings **directly to the CoreVeeAir plan GUID** so the plan carries its own performance profile and does not depend on prior state
+6. Renames the plan to **WinLO** so it displays correctly in Power Options
 
 ---
 
@@ -281,10 +278,7 @@ Disables 36 background tasks including the Compatibility Appraiser, all CEIP tas
 - **8.3 filename generation disabled** — removes legacy DOS short-name aliases from directory operations
 - **Storage Sense disabled** — stops Windows from automatically deleting files it considers redundant. On a gaming PC you control what gets deleted
 - **Hibernation fully disabled** — removes hiberfil.sys (file size equals your RAM), frees that disk space, speeds up shutdown
-- **Pagefile set to a fixed size** based on installed RAM (eliminates dynamic resize overhead during gameplay):
-  - Less than 8 GB RAM → 8192 MB
-  - 8 to 16 GB RAM → 4096 MB
-  - More than 16 GB RAM → 2048 MB
+- **Pagefile left as Windows-managed** — Windows sizes and manages the pagefile automatically. Earlier versions set a fixed size, but this was reverted to avoid instability and let Windows handle memory pressure dynamically
 
 ---
 
@@ -445,7 +439,7 @@ Clears system junk and reports disk space freed before and after.
 ## 🔬 Honest Assessment
 
 **Genuinely effective:**
-Spectre/Meltdown mitigation removal, Core Isolation disable, CPU idle states off, HAGS, ULPS off, USB Selective Suspend off, fixed pagefile, audio enhancement disable, service and task cleanup (especially on lower-end systems).
+Spectre/Meltdown mitigation removal, Core Isolation disable, HAGS, ULPS off, USB Selective Suspend off, audio enhancement disable, service and task cleanup (especially on lower-end systems).
 
 **Small but real:**
 DNS to 1.1.1.1, Win32PrioritySeparation, MMCSS tuning, network buffer tweaks.
@@ -458,7 +452,8 @@ The large `GraphicsDrivers\Power` latency registry block and most of the AFD par
 ## 🛡️ Restoring Security
 
 ```batch
-:: Re-enable UAC
+:: UAC is left ENABLED by this tool (programs prompt for admin as normal)
+:: If you ever need to force it on manually:
 reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 1 /f
 
 :: Re-enable Spectre/Meltdown mitigations
