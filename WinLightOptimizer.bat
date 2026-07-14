@@ -130,7 +130,7 @@ REG ADD "HKCU\Control Panel\Desktop" /v "SmoothScroll" /t REG_DWORD /d 0 /f >nul
 REG ADD "HKCU\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags\AllFolders\Shell" /v "FolderType" /t REG_SZ /d "NotSpecified" /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "HideFastUserSwitching" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 :: Disable UAC prompts entirely
-REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "EnableLUA" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "ConsentPromptBehaviorAdmin" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "ConsentPromptBehaviorUser" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "PromptOnSecureDesktop" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
@@ -182,11 +182,8 @@ REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "EnergySaverPolicy" /t 
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "CsEnabled" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v "CoalescingTimerInterval" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 :: Disable CPU idle states to prevent latency spikes
-powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
-powercfg -setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
 powercfg -setactive SCHEME_CURRENT >nul 2>&1
 :: SvcHost process split threshold
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control" /v "SvcHostSplitThresholdInKB" /t REG_DWORD /d 4096000 /f >nul 2>&1 || set STEP_ERR=1
 :: Power event processing
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "EventProcessorEnabled" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v "PreferExternalManifest"  /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
@@ -209,8 +206,6 @@ REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProf
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"  /v "SFIO Priority"        /t REG_SZ    /d "High"  /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"  /v "Latency Sensitive"    /t REG_SZ    /d "True"  /f >nul 2>&1 || set STEP_ERR=1
 :: Kernel timer resolution tuning
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "MinTimerResolution"   /t REG_DWORD /d 5000 /f >nul 2>&1 || set STEP_ERR=1
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "ClockTimerResolution" /t REG_DWORD /d 1    /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v "DistributeTimers"     /t REG_DWORD /d 1    /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\Control Panel\Desktop" /v "ForegroundLockTimeout" /t REG_DWORD /d 50 /f >nul 2>&1 || set STEP_ERR=1
 if !STEP_ERR!==0 (
@@ -368,7 +363,7 @@ netsh int tcp set supplemental internet congestionprovider=ctcp >nul 2>&1
 netsh interface 6to4 set state disabled >nul 2>&1
 netsh interface teredo set state disabled >nul 2>&1
 :: NIC-level: interrupt moderation, packet coalescing, EEE and power saving off on all adapters
-powershell -NoProfile -Command "Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -EA SilentlyContinue | Where-Object {$_.Name -match '\\\d{4}$'} | ForEach-Object { $p=$_.PSPath; @{'*InterruptModeration'=0;'InterruptModeration'=0;'*PacketCoalescing'=0;'PacketCoalescing'=0;'*ArpOffload'=0;'*EEE'=0;'AdvancedEEE'=0;'EnableGreenEthernet'=0;'EnableSavePowerNow'=0;'EnablePowerManagement'=0}.GetEnumerator() | ForEach-Object { Set-ItemProperty -Path $p -Name $_.Key -Value $_.Value -Type DWord -Force -EA SilentlyContinue } }" >nul 2>&1
+powershell -NoProfile -Command "Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -EA SilentlyContinue | Where-Object {$_.Name -match '\\\d{4}$'} | ForEach-Object { $p=$_.PSPath; @{'*PacketCoalescing'=0;'PacketCoalescing'=0;'*ArpOffload'=0;'*EEE'=0;'AdvancedEEE'=0;'EnableGreenEthernet'=0;'EnableSavePowerNow'=0;'EnablePowerManagement'=0}.GetEnumerator() | ForEach-Object { Set-ItemProperty -Path $p -Name $_.Key -Value $_.Value -Type DWord -Force -EA SilentlyContinue } }" >nul 2>&1
 :: Block mDNS to prevent local network discovery leakage
 netsh advfirewall firewall add rule name="WinLO Block mDNS IN"  protocol=UDP localport=5353 dir=in  action=block >nul 2>&1
 netsh advfirewall firewall add rule name="WinLO Block mDNS OUT" protocol=UDP localport=5353 dir=out action=block >nul 2>&1
@@ -739,8 +734,6 @@ if !ERRORLEVEL! neq 0 (
         REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
         REG ADD "HKLM\SYSTEM\ControlSet001\Control\Power\User\PowerSchemes" /v "ActivePowerScheme" /t REG_SZ /d "e62924f9-da5f-42c4-9c17-926bc1804ab8" /f >nul 2>&1
         :: Apply CPU idle-disable directly to the plan GUID
-        powercfg -setacvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
-        powercfg -setdcvalueindex e62924f9-da5f-42c4-9c17-926bc1804ab8 SUB_PROCESSOR IDLEDISABLE 1 >nul 2>&1
         powercfg -setactive e62924f9-da5f-42c4-9c17-926bc1804ab8 >nul 2>&1
 )
 :: Cleanup temp files
@@ -1243,15 +1236,13 @@ fsutil behavior set disablelastaccess 1 >nul 2>&1 || set STEP_ERR=1
 :: Disable 8.3 filename creation (reduces NTFS overhead on large directories)
 fsutil behavior set disable8dot3 1 >nul 2>&1 || set STEP_ERR=1
 :: Disable memory-mapped I/O for NTFS (reduces paging)
-REG ADD "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v "NtfsMemoryUsage" /t REG_DWORD /d 1 /f >nul 2>&1 || set STEP_ERR=1
 :: Disable Storage Sense (stops Windows from auto-deleting files in the background)
 REG ADD "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v "01" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 REG ADD "HKCU\SOFTWARE\Policies\Microsoft\Windows\StorageSense" /v "AllowStorageSenseGlobal" /t REG_DWORD /d 0 /f >nul 2>&1 || set STEP_ERR=1
 :: Disable hibernation completely and remove hiberfil.sys (frees RAM-sized disk space)
 powercfg /h off >nul 2>&1 || set STEP_ERR=1
-:: Pagefile: detect RAM and set fixed size (no dynamic resize overhead during gaming)
-:: <8GB RAM = 8192MB  |  8-16GB = 4096MB  |  >16GB = 2048MB
-powershell -NoProfile -Command "$r=[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB);$p=if($r-lt 8){8192}elseif($r-le 16){4096}else{2048};$c=Get-WmiObject Win32_ComputerSystem -EnableAllPrivileges;$c.AutomaticManagedPagefile=$false;$c.Put()|Out-Null;$pfs=Get-WmiObject Win32_PageFileSetting;if($pfs){$pfs|%%{$_.InitialSize=$p;$_.MaximumSize=$p;$_.Put()|Out-Null}}else{Set-WmiInstance -Class Win32_PageFileSetting -Arguments @{Name='C:\pagefile.sys';InitialSize=$p;MaximumSize=$p}|Out-Null}" >nul 2>&1 || set STEP_ERR=1
+:: Pagefile: let Windows automatically manage size
+powershell -NoProfile -Command "$c=Get-WmiObject Win32_ComputerSystem -EnableAllPrivileges;$c.AutomaticManagedPagefile=$true;$c.Put()|Out-Null" >nul 2>&1
 if !STEP_ERR!==0 (
     echo  [OK] Disk and File System Tweaks
     set /a PASS+=1
@@ -2278,7 +2269,7 @@ echo  [19] Core Isolation and Memory Integrity disabled
 echo  [20] Spectre and Meltdown mitigations disabled
 echo  [21] Unnecessary services disabled
 echo  [22] Scheduled tasks cleanup (telemetry, diagnostics, CEIP, maintenance)
-echo  [23] Disk tweaks (NTFS last-access off, 8.3 names off, hibernation off, fixed pagefile)
+echo  [23] Disk tweaks (NTFS last-access off, 8.3 names off, hibernation off, Windows-managed pagefile)
 echo  [24] UI and taskbar cleanup (widgets, chat, Start suggestions, lock screen ads, Sticky Keys)
 echo  [25] Audio tweaks (enhancements off, MMCSS priority tuning)
 echo  [26] NVIDIA/AMD cleanup (ULPS disabled, telemetry services stopped)
